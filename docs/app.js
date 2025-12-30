@@ -33,6 +33,9 @@ class SPYDashboard {
     this.alerts = [];
     this.lastAlertTime = 0;
     this.alertCooldown = 60000;
+    this.dataCache = {}; // Cache for API responses
+    this.cacheExpiry = 30000; // Cache expires after 30 seconds
+    this.usingRealData = false; // Track if we're using real data
 
     this.init();
   }
@@ -391,8 +394,131 @@ class SPYDashboard {
   }
 
   async fetchCandleData(timeframe) {
-    // Generate simulated SPY data for demo
+    // Always try to fetch real SPY data (Yahoo Finance works even when market is closed)
+    const cacheKey = `spy_${timeframe}`;
+    const cached = this.dataCache[cacheKey];
+    if (cached && Date.now() - cached.timestamp < this.cacheExpiry) {
+      return cached.data;
+    }
+
+    try {
+      const realData = await this.fetchRealSPYData(timeframe);
+      if (realData && realData.length >= 10) {
+        // Cache the result
+        this.dataCache[cacheKey] = { data: realData, timestamp: Date.now() };
+        if (!this.usingRealData) {
+          this.usingRealData = true;
+          this.updateDataSourceStatus(true);
+        }
+        return realData;
+      }
+    } catch (e) {
+      console.error('[SPY Dashboard] Real data fetch failed:', e.message);
+      if (this.usingRealData) {
+        this.usingRealData = false;
+        this.updateDataSourceStatus(false);
+      }
+    }
+
+    // Only use simulated data if ALL API attempts fail
+    console.warn('[SPY Dashboard] All data sources failed, using fallback data');
     return this.generateSPYData(timeframe);
+  }
+
+  updateDataSourceStatus(isReal) {
+    const statusText = document.getElementById('statusText');
+    if (statusText) {
+      statusText.textContent = isReal ? 'Live Data' : 'Demo Data';
+      statusText.style.color = isReal ? '#4ade80' : '#fbbf24';
+    }
+  }
+
+  async fetchRealSPYData(timeframe) {
+    // Map timeframe to Yahoo Finance parameters
+    const tfConfig = {
+      5: { interval: '5m', range: '1d' },
+      15: { interval: '15m', range: '5d' },
+      60: { interval: '60m', range: '1mo' },
+      240: { interval: '1d', range: '3mo' }  // 4h not available, use daily
+    };
+
+    const config = tfConfig[timeframe] || tfConfig[5];
+    const symbol = 'SPY';
+
+    // Yahoo Finance API endpoint
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&range=${config.range}`;
+
+    // Multiple CORS proxies for reliability
+    const corsProxies = [
+      (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://cors-anywhere.herokuapp.com/${u}`
+    ];
+
+    let response;
+    let lastError;
+
+    // Try direct fetch first
+    try {
+      response = await fetch(url, {
+        headers: { 'Accept': 'application/json' }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        return this.parseYahooData(data, timeframe);
+      }
+    } catch (e) {
+      lastError = e;
+    }
+
+    // Try each CORS proxy
+    for (const proxyFn of corsProxies) {
+      try {
+        const proxyUrl = proxyFn(url);
+        response = await fetch(proxyUrl);
+        if (response.ok) {
+          const data = await response.json();
+          return this.parseYahooData(data, timeframe);
+        }
+      } catch (e) {
+        lastError = e;
+        continue;
+      }
+    }
+
+    throw lastError || new Error('All fetch attempts failed');
+  }
+
+  parseYahooData(data, timeframe) {
+    if (!data.chart?.result?.[0]) {
+      throw new Error('Invalid response format');
+    }
+
+    const result = data.chart.result[0];
+    const timestamps = result.timestamp;
+    const quote = result.indicators.quote[0];
+
+    if (!timestamps || !quote) {
+      throw new Error('Missing price data');
+    }
+
+    // Convert to candle format
+    const candles = [];
+    for (let i = 0; i < timestamps.length; i++) {
+      if (quote.open[i] != null && quote.close[i] != null) {
+        candles.push({
+          time: timestamps[i] * 1000,
+          open: quote.open[i],
+          high: quote.high[i],
+          low: quote.low[i],
+          close: quote.close[i],
+          volume: quote.volume[i] || 0
+        });
+      }
+    }
+
+    console.log(`[SPY Dashboard] Fetched ${candles.length} real candles for ${timeframe}m`);
+    return candles;
   }
 
   generateSPYData(timeframe) {
