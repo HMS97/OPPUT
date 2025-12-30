@@ -91,6 +91,25 @@ class SPYOptionsAnalyzer {
   }
 
   async fetchSpotPrice() {
+    // Try backend API first (no CORS issues)
+    try {
+      console.log('[SPY Options] Fetching spot price from backend...');
+      const response = await fetch(`/api/quote/${this.symbol}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          this.spotPrice = data.price;
+          this.prevClose = data.previousClose;
+          this.updatePriceDisplay();
+          console.log('[SPY Options] Spot price fetched from backend:', this.spotPrice);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('[SPY Options] Backend unavailable, trying proxies...', e.message);
+    }
+
+    // Fallback to CORS proxies
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${this.symbol}?interval=1d&range=2d`;
 
     const proxies = [
@@ -132,6 +151,23 @@ class SPYOptionsAnalyzer {
   }
 
   async fetchExpiries() {
+    // Try backend API first (no CORS issues)
+    try {
+      console.log('[SPY Options] Fetching expiries from backend...');
+      const response = await fetch(`/api/options/${this.symbol}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.expirationDates) {
+          this.availableExpiries = data.expirationDates;
+          console.log(`[SPY Options] Available expiries from backend: ${this.availableExpiries.length}`);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('[SPY Options] Backend unavailable for expiries, trying proxies...', e.message);
+    }
+
+    // Fallback to CORS proxies
     const url = `https://query1.finance.yahoo.com/v7/finance/options/${this.symbol}`;
 
     const proxies = [
@@ -210,6 +246,23 @@ class SPYOptionsAnalyzer {
       throw new Error('No expiry selected');
     }
 
+    // Try backend API first (no CORS issues)
+    try {
+      console.log('[SPY Options] Fetching options chain from backend...');
+      const response = await fetch(`/api/options/${this.symbol}/${this.selectedExpiry}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.options) {
+          this.optionsData = { options: data.options };
+          console.log(`[SPY Options] Loaded chain from backend: ${this.optionsData.options[0]?.calls?.length || 0} calls, ${this.optionsData.options[0]?.puts?.length || 0} puts`);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('[SPY Options] Backend unavailable for options chain, trying proxies...', e.message);
+    }
+
+    // Fallback to CORS proxies
     const url = `https://query1.finance.yahoo.com/v7/finance/options/${this.symbol}?date=${this.selectedExpiry}`;
 
     const proxies = [

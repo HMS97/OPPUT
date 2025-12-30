@@ -150,6 +150,132 @@ app.get('/api/status', (req, res) => {
   });
 });
 
+// ============================================
+// Yahoo Finance Options API (no CORS issues)
+// ============================================
+
+// Helper to fetch from Yahoo Finance
+async function fetchYahooFinance(url) {
+  const https = require('https');
+
+  return new Promise((resolve, reject) => {
+    const options = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+      }
+    };
+
+    https.get(url, options, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error(`Failed to parse response: ${e.message}`));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
+// API endpoint: Get spot price for symbol
+app.get('/api/quote/:symbol', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase();
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2d`;
+
+    console.log(`[Server] Fetching quote for ${symbol}`);
+    const data = await fetchYahooFinance(url);
+
+    if (data.chart?.result?.[0]) {
+      const result = data.chart.result[0];
+      const meta = result.meta;
+      const quotes = result.indicators.quote[0];
+
+      res.json({
+        success: true,
+        symbol,
+        price: meta.regularMarketPrice,
+        previousClose: meta.previousClose || quotes.close[quotes.close.length - 2],
+        timestamp: Date.now()
+      });
+    } else {
+      throw new Error('Invalid response from Yahoo Finance');
+    }
+  } catch (error) {
+    console.error('[Server] Quote error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API endpoint: Get available expiries for options
+app.get('/api/options/:symbol', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase();
+    const url = `https://query1.finance.yahoo.com/v7/finance/options/${symbol}`;
+
+    console.log(`[Server] Fetching options expiries for ${symbol}`);
+    const data = await fetchYahooFinance(url);
+
+    if (data.optionChain?.result?.[0]) {
+      const result = data.optionChain.result[0];
+      res.json({
+        success: true,
+        symbol,
+        expirationDates: result.expirationDates,
+        strikes: result.strikes,
+        quote: result.quote,
+        timestamp: Date.now()
+      });
+    } else {
+      throw new Error('Invalid options response from Yahoo Finance');
+    }
+  } catch (error) {
+    console.error('[Server] Options error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API endpoint: Get options chain for specific expiry
+app.get('/api/options/:symbol/:expiry', async (req, res) => {
+  try {
+    const symbol = req.params.symbol.toUpperCase();
+    const expiry = req.params.expiry;
+    const url = `https://query1.finance.yahoo.com/v7/finance/options/${symbol}?date=${expiry}`;
+
+    console.log(`[Server] Fetching options chain for ${symbol} expiry ${expiry}`);
+    const data = await fetchYahooFinance(url);
+
+    if (data.optionChain?.result?.[0]) {
+      const result = data.optionChain.result[0];
+      res.json({
+        success: true,
+        symbol,
+        expiry: parseInt(expiry),
+        quote: result.quote,
+        options: result.options,
+        timestamp: Date.now()
+      });
+    } else {
+      throw new Error('Invalid options chain response from Yahoo Finance');
+    }
+  } catch (error) {
+    console.error('[Server] Options chain error:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Serve frontend
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'docs', 'index.html'));
