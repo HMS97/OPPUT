@@ -1,5 +1,5 @@
 /**
- * SPY PUT Alert Dashboard - Multi-Timeframe Combined Analysis
+ * SPY Alert Dashboard - Multi-Timeframe Combined Analysis with Backtesting
  */
 
 const TF_CONFIG = {
@@ -11,11 +11,17 @@ const TF_CONFIG = {
 
 const PATTERN_ICONS = {
   'LOWER_HIGH': '📉',
+  'HIGHER_LOW': '📈',
   'REJECTION_AT_RESISTANCE': '🛑',
+  'REJECTION_AT_SUPPORT': '🟢',
   'FALSE_BREAKOUT': '💥',
+  'FALSE_BREAKOUT_DOWN': '💫',
   'ABSORPTION': '🔄',
+  'ABSORPTION_BUYING': '🔃',
   'DOUBLE_REJECTION': '⚡',
-  'PRICE_STALLING': '⏸️'
+  'DOUBLE_REJECTION_BOTTOM': '⚡',
+  'PRICE_STALLING': '⏸️',
+  'PRICE_STALLING_LOW': '⏸️'
 };
 
 class SPYDashboard {
@@ -28,11 +34,20 @@ class SPYDashboard {
     this.refreshInterval = 10;
     this.scanTimer = null;
     this.detectors = {};
-    this.signals = {}; // Store signal per timeframe
-    this.patterns = {}; // Store patterns per timeframe
+    this.signals = {};
+    this.patterns = {};
     this.alerts = [];
     this.lastAlertTime = 0;
     this.alertCooldown = 60000;
+
+    // Backtesting state
+    this.backtestMode = false;
+    this.backtestData = {};
+    this.backtestIndex = 0;
+    this.backtestResults = [];
+    this.backtestSpeed = 500; // ms per candle
+    this.backtestTimer = null;
+    this.marketPhase = 'random'; // random, uptrend, downtrend, choppy
 
     this.init();
   }
@@ -43,14 +58,14 @@ class SPYDashboard {
     this.bindEvents();
     this.startMonitoring();
     this.updateConnectionStatus(true);
-    console.log('[SPY Dashboard] Multi-timeframe analysis initialized');
+    console.log('[SPY Dashboard] Multi-timeframe analysis with backtesting initialized');
   }
 
   initDetectors() {
     const configs = {
-      low: { rejectionThreshold: 0.003, consolidationBars: 5, lowerHighTolerance: 0.0015 },
-      medium: { rejectionThreshold: 0.002, consolidationBars: 3, lowerHighTolerance: 0.001 },
-      high: { rejectionThreshold: 0.001, consolidationBars: 2, lowerHighTolerance: 0.0005 }
+      low: { rejectionThreshold: 0.003, consolidationBars: 5, lowerHighTolerance: 0.0015, higherLowTolerance: 0.0015 },
+      medium: { rejectionThreshold: 0.002, consolidationBars: 3, lowerHighTolerance: 0.001, higherLowTolerance: 0.001 },
+      high: { rejectionThreshold: 0.001, consolidationBars: 2, lowerHighTolerance: 0.0005, higherLowTolerance: 0.0005 }
     };
 
     const baseConfig = configs[this.sensitivity];
@@ -60,9 +75,10 @@ class SPYDashboard {
       this.detectors[tf] = new PutPatternDetector({
         ...baseConfig,
         rejectionThreshold: baseConfig.rejectionThreshold * tfMultiplier,
-        lowerHighTolerance: baseConfig.lowerHighTolerance * tfMultiplier
+        lowerHighTolerance: baseConfig.lowerHighTolerance * tfMultiplier,
+        higherLowTolerance: baseConfig.higherLowTolerance * tfMultiplier
       });
-      this.signals[tf] = { strength: 0, patterns: [] };
+      this.signals[tf] = { strength: 0, patterns: [], direction: 'NEUTRAL' };
       this.patterns[tf] = [];
     }
   }
@@ -98,12 +114,19 @@ class SPYDashboard {
 
   bindEvents() {
     // Data mode toggle
-    document.getElementById('realtimeBtn').addEventListener('click', () => {
-      this.setDataMode('realtime');
-    });
-    document.getElementById('replayBtn').addEventListener('click', () => {
-      this.setDataMode('replay');
-    });
+    const realtimeBtn = document.getElementById('realtimeBtn');
+    const replayBtn = document.getElementById('replayBtn');
+
+    if (realtimeBtn) {
+      realtimeBtn.addEventListener('click', () => {
+        this.setDataMode('realtime');
+      });
+    }
+    if (replayBtn) {
+      replayBtn.addEventListener('click', () => {
+        this.setDataMode('replay');
+      });
+    }
 
     // Chart tabs
     document.querySelectorAll('.chart-tab').forEach(btn => {
@@ -114,27 +137,82 @@ class SPYDashboard {
     });
 
     // Settings
-    document.getElementById('sensitivity').addEventListener('change', (e) => {
-      this.sensitivity = e.target.value;
-      this.initDetectors();
-      this.performScan();
-    });
+    const sensitivityEl = document.getElementById('sensitivity');
+    if (sensitivityEl) {
+      sensitivityEl.addEventListener('change', (e) => {
+        this.sensitivity = e.target.value;
+        this.initDetectors();
+        this.performScan();
+      });
+    }
 
-    document.getElementById('soundToggle').addEventListener('change', (e) => {
-      this.soundEnabled = e.target.checked;
-    });
+    const soundToggleEl = document.getElementById('soundToggle');
+    if (soundToggleEl) {
+      soundToggleEl.addEventListener('change', (e) => {
+        this.soundEnabled = e.target.checked;
+      });
+    }
 
-    document.getElementById('refreshInterval').addEventListener('change', (e) => {
-      this.refreshInterval = parseInt(e.target.value);
-      this.restartMonitoring();
-    });
+    const refreshIntervalEl = document.getElementById('refreshInterval');
+    if (refreshIntervalEl) {
+      refreshIntervalEl.addEventListener('change', (e) => {
+        this.refreshInterval = parseInt(e.target.value);
+        this.restartMonitoring();
+      });
+    }
+
+    // Backtest controls
+    const backtestStartBtn = document.getElementById('backtestStart');
+    const backtestStopBtn = document.getElementById('backtestStop');
+    const backtestStepBtn = document.getElementById('backtestStep');
+    const marketPhaseEl = document.getElementById('marketPhase');
+
+    if (backtestStartBtn) {
+      backtestStartBtn.addEventListener('click', () => this.startBacktest());
+    }
+    if (backtestStopBtn) {
+      backtestStopBtn.addEventListener('click', () => this.stopBacktest());
+    }
+    if (backtestStepBtn) {
+      backtestStepBtn.addEventListener('click', () => this.stepBacktest());
+    }
+    if (marketPhaseEl) {
+      marketPhaseEl.addEventListener('change', (e) => {
+        this.marketPhase = e.target.value;
+        if (this.dataMode === 'replay') {
+          this.generateBacktestData();
+          this.backtestIndex = 50; // Reset to middle
+          this.performScan();
+        }
+      });
+    }
   }
 
   setDataMode(mode) {
     this.dataMode = mode;
-    document.getElementById('realtimeBtn').classList.toggle('active', mode === 'realtime');
-    document.getElementById('replayBtn').classList.toggle('active', mode === 'replay');
-    document.getElementById('statusText').textContent = mode === 'realtime' ? 'Live' : 'Replay';
+    const realtimeBtn = document.getElementById('realtimeBtn');
+    const replayBtn = document.getElementById('replayBtn');
+    const statusText = document.getElementById('statusText');
+    const backtestControls = document.getElementById('backtestControls');
+
+    if (realtimeBtn) realtimeBtn.classList.toggle('active', mode === 'realtime');
+    if (replayBtn) replayBtn.classList.toggle('active', mode === 'replay');
+    if (statusText) statusText.textContent = mode === 'realtime' ? 'Live' : 'Replay';
+
+    if (backtestControls) {
+      backtestControls.style.display = mode === 'replay' ? 'block' : 'none';
+    }
+
+    if (mode === 'replay') {
+      this.generateBacktestData();
+      this.backtestIndex = 50;
+      this.backtestResults = [];
+      this.updateBacktestStats();
+    } else {
+      this.stopBacktest();
+    }
+
+    this.performScan();
   }
 
   setChartTimeframe(tf) {
@@ -158,32 +236,308 @@ class SPYDashboard {
     this.startMonitoring();
   }
 
+  // ==================== BALANCED DATA GENERATION ====================
+
+  generateBacktestData() {
+    // Generate 200 candles of balanced data for backtesting
+    for (const tf of this.timeframes) {
+      this.backtestData[tf] = this.generateBalancedData(tf, 200);
+    }
+  }
+
+  generateBalancedData(timeframe, count = 200) {
+    const candles = [];
+    let price = 590;
+    const now = Date.now();
+    const intervalMs = timeframe * 60 * 1000;
+
+    // Determine market behavior based on phase setting
+    const phase = this.marketPhase;
+
+    for (let i = 0; i < count; i++) {
+      let candle;
+
+      if (phase === 'random') {
+        candle = this.generateRandomCandle(price, i, count);
+      } else if (phase === 'uptrend') {
+        candle = this.generateUptrendCandle(price, i, count);
+      } else if (phase === 'downtrend') {
+        candle = this.generateDowntrendCandle(price, i, count);
+      } else if (phase === 'choppy') {
+        candle = this.generateChoppyCandle(price, i, count);
+      } else {
+        candle = this.generateRandomCandle(price, i, count);
+      }
+
+      candle.time = now - (count - i) * intervalMs;
+      candles.push(candle);
+      price = candle.close;
+    }
+
+    return candles;
+  }
+
+  generateRandomCandle(price, index, total) {
+    // Truly random price action - can go either way
+    const volatility = 0.002; // 0.2% base volatility
+    const direction = Math.random() > 0.5 ? 1 : -1;
+    const change = price * volatility * (0.5 + Math.random()) * direction;
+
+    const open = price;
+    const close = price + change;
+
+    // Random wick sizes - can create either bullish or bearish patterns
+    const upperWickRatio = Math.random();
+    const lowerWickRatio = Math.random();
+
+    const range = Math.abs(change) * (1 + Math.random());
+    const high = Math.max(open, close) + range * upperWickRatio;
+    const low = Math.min(open, close) - range * lowerWickRatio;
+
+    return {
+      open,
+      high,
+      low,
+      close,
+      volume: Math.random() * 1000000 + 500000
+    };
+  }
+
+  generateUptrendCandle(price, index, total) {
+    // Uptrend with occasional pullbacks - should trigger CALL signals
+    const isBullish = Math.random() > 0.3; // 70% bullish candles
+    const volatility = 0.002;
+
+    const open = price;
+    let close, high, low;
+
+    if (isBullish) {
+      const change = price * volatility * (0.5 + Math.random());
+      close = open + change;
+      // Small upper wick, larger lower wick (support)
+      high = close + Math.abs(change) * Math.random() * 0.3;
+      low = open - Math.abs(change) * (0.5 + Math.random() * 0.5);
+    } else {
+      // Pullback candle with lower wick rejection (bullish signal)
+      const change = price * volatility * Math.random() * 0.5;
+      close = open - change;
+      high = open + Math.abs(change) * 0.3;
+      // Long lower wick = buying pressure
+      low = close - Math.abs(change) * (1 + Math.random());
+    }
+
+    return {
+      open,
+      high,
+      low,
+      close,
+      volume: Math.random() * 1000000 + 500000
+    };
+  }
+
+  generateDowntrendCandle(price, index, total) {
+    // Downtrend with occasional bounces - should trigger PUT signals
+    const isBearish = Math.random() > 0.3; // 70% bearish candles
+    const volatility = 0.002;
+
+    const open = price;
+    let close, high, low;
+
+    if (isBearish) {
+      const change = price * volatility * (0.5 + Math.random());
+      close = open - change;
+      // Small lower wick, larger upper wick (resistance)
+      low = close - Math.abs(change) * Math.random() * 0.3;
+      high = open + Math.abs(change) * (0.5 + Math.random() * 0.5);
+    } else {
+      // Bounce candle with upper wick rejection (bearish signal)
+      const change = price * volatility * Math.random() * 0.5;
+      close = open + change;
+      low = open - Math.abs(change) * 0.3;
+      // Long upper wick = selling pressure
+      high = close + Math.abs(change) * (1 + Math.random());
+    }
+
+    return {
+      open,
+      high,
+      low,
+      close,
+      volume: Math.random() * 1000000 + 500000
+    };
+  }
+
+  generateChoppyCandle(price, index, total) {
+    // Choppy market - alternating directions, mixed signals
+    const direction = index % 2 === 0 ? 1 : -1;
+    const volatility = 0.003; // Higher volatility
+
+    const open = price;
+    const change = price * volatility * (0.3 + Math.random() * 0.7) * direction;
+    const close = open + change;
+
+    // Large wicks on both sides
+    const wickSize = Math.abs(change) * (0.5 + Math.random());
+    const high = Math.max(open, close) + wickSize;
+    const low = Math.min(open, close) - wickSize;
+
+    return {
+      open,
+      high,
+      low,
+      close,
+      volume: Math.random() * 1000000 + 500000
+    };
+  }
+
+  // ==================== BACKTESTING ====================
+
+  startBacktest() {
+    if (this.backtestMode) return;
+
+    this.backtestMode = true;
+    this.backtestIndex = 50; // Start with 50 candles visible
+    this.backtestResults = [];
+
+    console.log('[Backtest] Starting backtest...');
+
+    this.backtestTimer = setInterval(() => {
+      this.stepBacktest();
+    }, this.backtestSpeed);
+
+    this.updateBacktestUI();
+  }
+
+  stopBacktest() {
+    this.backtestMode = false;
+    if (this.backtestTimer) {
+      clearInterval(this.backtestTimer);
+      this.backtestTimer = null;
+    }
+    this.updateBacktestUI();
+    console.log('[Backtest] Stopped. Results:', this.backtestResults.length, 'signals');
+  }
+
+  stepBacktest() {
+    if (!this.backtestData[5] || this.backtestIndex >= this.backtestData[5].length - 1) {
+      this.stopBacktest();
+      this.showBacktestSummary();
+      return;
+    }
+
+    this.backtestIndex++;
+    this.performScan();
+
+    // Record signal for backtesting
+    const combinedSignal = this.calculateCombinedSignal();
+    if (combinedSignal.strength >= 50) {
+      const currentPrice = this.backtestData[5][this.backtestIndex].close;
+      const futureIndex = Math.min(this.backtestIndex + 10, this.backtestData[5].length - 1);
+      const futurePrice = this.backtestData[5][futureIndex].close;
+
+      this.backtestResults.push({
+        index: this.backtestIndex,
+        direction: combinedSignal.direction,
+        strength: combinedSignal.strength,
+        entryPrice: currentPrice,
+        exitPrice: futurePrice,
+        priceDiff: futurePrice - currentPrice,
+        correct: (combinedSignal.direction === 'PUT' && futurePrice < currentPrice) ||
+                 (combinedSignal.direction === 'CALL' && futurePrice > currentPrice)
+      });
+    }
+
+    this.updateBacktestStats();
+    this.updateBacktestProgress();
+  }
+
+  updateBacktestUI() {
+    const startBtn = document.getElementById('backtestStart');
+    const stopBtn = document.getElementById('backtestStop');
+
+    if (startBtn) startBtn.disabled = this.backtestMode;
+    if (stopBtn) stopBtn.disabled = !this.backtestMode;
+  }
+
+  updateBacktestProgress() {
+    const progressEl = document.getElementById('backtestProgress');
+    if (progressEl && this.backtestData[5]) {
+      const progress = Math.round((this.backtestIndex / this.backtestData[5].length) * 100);
+      progressEl.textContent = `Progress: ${progress}% (${this.backtestIndex}/${this.backtestData[5].length})`;
+    }
+  }
+
+  updateBacktestStats() {
+    const statsEl = document.getElementById('backtestStats');
+    if (!statsEl) return;
+
+    if (this.backtestResults.length === 0) {
+      statsEl.innerHTML = '<p>No signals recorded yet</p>';
+      return;
+    }
+
+    const total = this.backtestResults.length;
+    const correct = this.backtestResults.filter(r => r.correct).length;
+    const winRate = ((correct / total) * 100).toFixed(1);
+
+    const putSignals = this.backtestResults.filter(r => r.direction === 'PUT');
+    const callSignals = this.backtestResults.filter(r => r.direction === 'CALL');
+    const putCorrect = putSignals.filter(r => r.correct).length;
+    const callCorrect = callSignals.filter(r => r.correct).length;
+
+    statsEl.innerHTML = `
+      <div class="backtest-stat">
+        <span>Total Signals:</span>
+        <strong>${total}</strong>
+      </div>
+      <div class="backtest-stat">
+        <span>Win Rate:</span>
+        <strong style="color: ${winRate >= 50 ? '#4ade80' : '#e94560'}">${winRate}%</strong>
+      </div>
+      <div class="backtest-stat">
+        <span>PUT Signals:</span>
+        <strong>${putSignals.length} (${putSignals.length > 0 ? ((putCorrect/putSignals.length)*100).toFixed(0) : 0}% win)</strong>
+      </div>
+      <div class="backtest-stat">
+        <span>CALL Signals:</span>
+        <strong>${callSignals.length} (${callSignals.length > 0 ? ((callCorrect/callSignals.length)*100).toFixed(0) : 0}% win)</strong>
+      </div>
+    `;
+  }
+
+  showBacktestSummary() {
+    console.log('=== BACKTEST SUMMARY ===');
+    console.log('Total Signals:', this.backtestResults.length);
+    const correct = this.backtestResults.filter(r => r.correct).length;
+    console.log('Correct:', correct);
+    console.log('Win Rate:', ((correct / this.backtestResults.length) * 100).toFixed(1) + '%');
+    console.log('Results:', this.backtestResults);
+  }
+
+  // ==================== SCANNING ====================
+
   async performScan() {
     try {
       let allPatterns = [];
       let priceData = null;
 
-      // Scan ALL timeframes
       for (const tf of this.timeframes) {
         const candles = await this.fetchCandleData(tf);
 
         if (!candles || candles.length < 10) {
-          this.signals[tf] = { strength: 0, patterns: [] };
+          this.signals[tf] = { strength: 0, patterns: [], direction: 'NEUTRAL' };
           this.patterns[tf] = [];
           continue;
         }
 
-        // Get price from first timeframe
         if (!priceData) {
           priceData = candles;
         }
 
-        // Run pattern detection
         const detector = this.detectors[tf];
         const patterns = detector.analyze(candles);
         const signal = detector.getSignalSummary();
 
-        // Add timeframe to patterns
         patterns.forEach(p => p.timeframe = tf);
 
         this.signals[tf] = signal;
@@ -191,27 +545,19 @@ class SPYDashboard {
         allPatterns = allPatterns.concat(patterns);
       }
 
-      // Update price display
       if (priceData) {
         this.updatePriceDisplay(priceData);
       }
 
-      // Update each timeframe card
       for (const tf of this.timeframes) {
         this.updateTimeframeCard(tf, this.signals[tf], this.patterns[tf]);
       }
 
-      // Calculate combined signal
       const combinedSignal = this.calculateCombinedSignal();
-
-      // Update overall display
       this.updateOverallDisplay(combinedSignal, allPatterns);
-
-      // Update all patterns list
       this.updateAllPatternsList(allPatterns);
 
-      // Trigger alert if needed
-      if (combinedSignal.strength >= 50 && Date.now() - this.lastAlertTime > this.alertCooldown) {
+      if (!this.backtestMode && combinedSignal.strength >= 50 && Date.now() - this.lastAlertTime > this.alertCooldown) {
         this.triggerAlert(combinedSignal, allPatterns);
       }
 
@@ -220,20 +566,43 @@ class SPYDashboard {
     }
   }
 
+  async fetchCandleData(timeframe) {
+    if (this.dataMode === 'replay' && this.backtestData[timeframe]) {
+      // Return slice up to current backtest index
+      const ratio = timeframe / 5; // Ratio to 5min timeframe
+      const adjustedIndex = Math.floor(this.backtestIndex / ratio);
+      return this.backtestData[timeframe].slice(0, Math.max(50, adjustedIndex));
+    }
+    return this.generateBalancedData(timeframe, 105);
+  }
+
   calculateCombinedSignal() {
-    let totalStrength = 0;
-    let maxStrength = 0;
+    let putWeight = 0;
+    let callWeight = 0;
     let activeTimeframes = [];
 
     for (const tf of this.timeframes) {
       const signal = this.signals[tf];
       if (signal.strength > 0) {
-        totalStrength += signal.strength;
         activeTimeframes.push(tf);
-        if (signal.strength > maxStrength) {
-          maxStrength = signal.strength;
+        if (signal.direction === 'PUT') {
+          putWeight += signal.putWeight || signal.strength;
+        } else if (signal.direction === 'CALL') {
+          callWeight += signal.callWeight || signal.strength;
         }
       }
+    }
+
+    // Determine overall direction
+    let direction = 'NEUTRAL';
+    let dominantWeight = 0;
+
+    if (putWeight > callWeight + 2) {
+      direction = 'PUT';
+      dominantWeight = putWeight;
+    } else if (callWeight > putWeight + 2) {
+      direction = 'CALL';
+      dominantWeight = callWeight;
     }
 
     // Confluence bonus
@@ -242,14 +611,18 @@ class SPYDashboard {
     else if (activeTimeframes.length === 3) confluenceBonus = 15;
     else if (activeTimeframes.length === 2) confluenceBonus = 10;
 
-    // Combined strength: average of active + bonus, capped at 100
-    const avgStrength = activeTimeframes.length > 0 ? totalStrength / activeTimeframes.length : 0;
-    const combinedStrength = Math.min(100, avgStrength + confluenceBonus);
+    // Calculate combined strength based on dominance
+    const totalWeight = putWeight + callWeight;
+    const dominanceRatio = totalWeight > 0 ? dominantWeight / totalWeight : 0;
+    const baseStrength = dominantWeight > 0 ? Math.min(75, dominantWeight * 5) : 0;
+    const combinedStrength = Math.min(100, baseStrength * dominanceRatio + confluenceBonus);
 
     return {
-      strength: combinedStrength,
+      strength: direction === 'NEUTRAL' ? 0 : combinedStrength,
+      direction,
       activeTimeframes,
-      maxStrength,
+      putWeight,
+      callWeight,
       confluenceBonus
     };
   }
@@ -261,23 +634,27 @@ class SPYDashboard {
     const meter = document.getElementById(`meter${tfId}`);
     const patternsList = document.getElementById(`patterns${tfId}`);
 
-    // Verify elements exist
     if (!card || !badge || !meter || !patternsList) {
       console.warn(`[SPY Dashboard] Missing elements for timeframe ${tfId}`);
       return;
     }
 
-    // Update card state
-    card.classList.toggle('has-signal', signal.strength >= 50);
+    // Update card state with direction-aware classes
+    card.classList.remove('has-signal', 'has-put', 'has-call');
+    if (signal.strength >= 50) {
+      card.classList.add('has-signal');
+      if (signal.direction === 'PUT') card.classList.add('has-put');
+      if (signal.direction === 'CALL') card.classList.add('has-call');
+    }
 
-    // Update badge
+    // Update badge with direction
     badge.className = 'tf-signal-badge';
     if (signal.strength >= 75) {
-      badge.classList.add('badge-strong');
-      badge.textContent = `${Math.round(signal.strength)}%`;
+      badge.classList.add(signal.direction === 'CALL' ? 'badge-strong-call' : 'badge-strong');
+      badge.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
     } else if (signal.strength >= 50) {
-      badge.classList.add('badge-medium');
-      badge.textContent = `${Math.round(signal.strength)}%`;
+      badge.classList.add(signal.direction === 'CALL' ? 'badge-medium-call' : 'badge-medium');
+      badge.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
     } else if (signal.strength > 0) {
       badge.classList.add('badge-weak');
       badge.textContent = `${Math.round(signal.strength)}%`;
@@ -286,15 +663,22 @@ class SPYDashboard {
       badge.textContent = '--';
     }
 
-    // Update meter
+    // Update meter color based on direction
     meter.style.width = `${signal.strength}%`;
+    if (signal.direction === 'CALL') {
+      meter.style.background = 'linear-gradient(90deg, #22c55e, #4ade80)';
+    } else if (signal.direction === 'PUT') {
+      meter.style.background = 'linear-gradient(90deg, #e94560, #ff6b6b)';
+    } else {
+      meter.style.background = 'linear-gradient(90deg, #666, #888)';
+    }
 
     // Update patterns
     if (patterns.length > 0) {
       patternsList.innerHTML = patterns.slice(0, 3).map(p => `
-        <div class="tf-pattern-item">
+        <div class="tf-pattern-item ${p.signal.toLowerCase()}">
           <span class="tf-pattern-icon">${PATTERN_ICONS[p.type] || '📊'}</span>
-          <span>${p.name}</span>
+          <span>${p.name} (${p.signal})</span>
         </div>
       `).join('');
     } else {
@@ -303,18 +687,38 @@ class SPYDashboard {
   }
 
   updateOverallDisplay(signal, allPatterns) {
-    // Update signal value
     const signalValueEl = document.getElementById('overallSignalValue');
     const meterEl = document.getElementById('overallMeter');
 
-    if (signalValueEl) signalValueEl.textContent = `${Math.round(signal.strength)}%`;
-    if (meterEl) meterEl.style.width = `${signal.strength}%`;
+    if (signalValueEl) {
+      signalValueEl.textContent = signal.direction === 'NEUTRAL' ?
+        'NEUTRAL' : `${signal.direction} ${Math.round(signal.strength)}%`;
+      signalValueEl.className = `signal-value ${signal.direction.toLowerCase()}`;
+    }
+
+    if (meterEl) {
+      meterEl.style.width = `${signal.strength}%`;
+      if (signal.direction === 'CALL') {
+        meterEl.style.background = 'linear-gradient(90deg, #22c55e, #4ade80)';
+      } else if (signal.direction === 'PUT') {
+        meterEl.style.background = 'linear-gradient(90deg, #e94560, #ff6b6b)';
+      } else {
+        meterEl.style.background = 'linear-gradient(90deg, #666, #888)';
+      }
+    }
 
     // Update confluence dots
     for (const tf of this.timeframes) {
       const tfId = TF_CONFIG[tf].id;
       const dot = document.getElementById(`conf${tfId}`);
-      if (dot) dot.classList.toggle('active', signal.activeTimeframes.includes(tf));
+      if (dot) {
+        dot.classList.toggle('active', signal.activeTimeframes.includes(tf));
+        // Color code by direction
+        const tfSignal = this.signals[tf];
+        dot.classList.remove('put', 'call');
+        if (tfSignal.direction === 'PUT') dot.classList.add('put');
+        if (tfSignal.direction === 'CALL') dot.classList.add('call');
+      }
     }
 
     // Update status box
@@ -322,40 +726,54 @@ class SPYDashboard {
     if (!statusBox) return;
     statusBox.className = 'status-box';
 
-    if (signal.strength >= 75) {
-      statusBox.classList.add('status-strong');
-      statusBox.textContent = '🔻 STRONG PUT!';
-    } else if (signal.strength >= 50) {
-      statusBox.classList.add('status-medium');
-      statusBox.textContent = '⚠️ PUT Signal';
-    } else if (signal.strength > 0) {
-      statusBox.classList.add('status-weak');
-      statusBox.textContent = 'Weak Signal';
-    } else {
+    if (signal.direction === 'NEUTRAL') {
       statusBox.classList.add('status-none');
       statusBox.textContent = 'Monitoring...';
+    } else if (signal.direction === 'PUT') {
+      if (signal.strength >= 75) {
+        statusBox.classList.add('status-strong');
+        statusBox.textContent = '🔻 STRONG PUT!';
+      } else if (signal.strength >= 50) {
+        statusBox.classList.add('status-medium');
+        statusBox.textContent = '⚠️ PUT Signal';
+      } else {
+        statusBox.classList.add('status-weak');
+        statusBox.textContent = 'Weak PUT';
+      }
+    } else if (signal.direction === 'CALL') {
+      if (signal.strength >= 75) {
+        statusBox.classList.add('status-strong-call');
+        statusBox.textContent = '🔺 STRONG CALL!';
+      } else if (signal.strength >= 50) {
+        statusBox.classList.add('status-medium-call');
+        statusBox.textContent = '✅ CALL Signal';
+      } else {
+        statusBox.classList.add('status-weak');
+        statusBox.textContent = 'Weak CALL';
+      }
     }
   }
 
   updateAllPatternsList(patterns) {
     const container = document.getElementById('allPatternsList');
+    if (!container) return;
 
     if (patterns.length === 0) {
       container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;font-size:12px;">No patterns detected</p>';
       return;
     }
 
-    // Sort by timeframe (higher TF first for importance)
     const sorted = [...patterns].sort((a, b) => b.timeframe - a.timeframe);
 
     container.innerHTML = sorted.slice(0, 8).map(p => `
-      <div class="pattern-item">
+      <div class="pattern-item ${p.signal.toLowerCase()}">
         <span class="pattern-icon">${PATTERN_ICONS[p.type] || '📊'}</span>
         <div class="pattern-info">
           <div class="pattern-name">${p.name}</div>
           <div class="pattern-desc">${p.description}</div>
         </div>
         <span class="pattern-tf">${TF_CONFIG[p.timeframe].name}</span>
+        <span class="pattern-signal ${p.signal.toLowerCase()}">${p.signal}</span>
       </div>
     `).join('');
   }
@@ -390,87 +808,12 @@ class SPYDashboard {
     }
   }
 
-  async fetchCandleData(timeframe) {
-    // Generate simulated SPY data for demo
-    return this.generateSPYData(timeframe);
-  }
-
-  generateSPYData(timeframe) {
-    const candles = [];
-    let price = 590;
-    const now = Date.now();
-    const intervalMs = timeframe * 60 * 1000;
-
-    // Phase 1: Uptrend (candles 0-60)
-    for (let i = 0; i < 60; i++) {
-      const open = price;
-      const change = price * 0.001 * (0.3 + Math.random() * 0.7);
-      const close = open + change;
-      const high = close + Math.abs(change) * Math.random() * 0.3;
-      const low = open - Math.abs(change) * Math.random() * 0.2;
-      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
-      price = close;
-    }
-
-    // Record the high point
-    const peakPrice = price;
-
-    // Phase 2: First rejection at resistance (candles 60-70)
-    for (let i = 60; i < 70; i++) {
-      const open = price;
-      // Create rejection candles with long upper wicks
-      const high = peakPrice * 1.003 + Math.random() * 0.5;
-      const close = open - price * 0.001 * Math.random();
-      const low = Math.min(open, close) - Math.abs(open - close) * 0.2;
-      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
-      price = close;
-    }
-
-    // Phase 3: Small pullback (candles 70-80)
-    for (let i = 70; i < 80; i++) {
-      const open = price;
-      const change = price * 0.0008 * (Math.random() - 0.6);
-      const close = open + change;
-      const high = Math.max(open, close) + Math.abs(change) * 0.3;
-      const low = Math.min(open, close) - Math.abs(change) * 0.3;
-      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
-      price = close;
-    }
-
-    // Phase 4: Lower high attempt with rejection (candles 80-90)
-    const lowerHighTarget = peakPrice * 0.998; // Lower than previous high
-    for (let i = 80; i < 90; i++) {
-      const open = price;
-      // Push up towards lower high then reject
-      const high = lowerHighTarget + Math.random() * 0.3;
-      const close = open - price * 0.0005 * (1 + Math.random());
-      const low = close - Math.abs(open - close) * 0.2;
-      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
-      price = close;
-    }
-
-    // Phase 5: Recent candles with strong rejection wicks (candles 90-105)
-    for (let i = 90; i < 105; i++) {
-      const open = price;
-      // Create strong rejection patterns - long upper wicks, close near low
-      const wickSize = price * 0.002 * (1 + Math.random());
-      const high = open + wickSize;
-      const body = price * 0.0003 * (1 + Math.random());
-      const close = open - body;
-      const low = close - body * 0.3;
-      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
-      price = close;
-    }
-
-    return candles;
-  }
-
   triggerAlert(signal, patterns) {
     this.lastAlertTime = Date.now();
 
-    // Add to history
     this.alerts.unshift({
       time: new Date(),
+      direction: signal.direction,
       strength: signal.strength,
       timeframes: signal.activeTimeframes,
       patterns: patterns.slice(0, 3).map(p => p.name)
@@ -478,15 +821,14 @@ class SPYDashboard {
     this.alerts = this.alerts.slice(0, 20);
     this.updateAlertHistory();
 
-    // Show popup
     this.showAlertPopup(signal, patterns);
 
-    // Play sound
     if (this.soundEnabled) this.playAlertSound();
   }
 
   updateAlertHistory() {
     const container = document.getElementById('alertList');
+    if (!container) return;
 
     if (this.alerts.length === 0) {
       container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;font-size:12px;">No alerts yet</p>';
@@ -494,9 +836,9 @@ class SPYDashboard {
     }
 
     container.innerHTML = this.alerts.slice(0, 10).map(a => `
-      <div class="alert-item">
+      <div class="alert-item ${a.direction.toLowerCase()}">
         <div class="alert-header">
-          <span class="alert-type">PUT ${Math.round(a.strength)}%</span>
+          <span class="alert-type ${a.direction.toLowerCase()}">${a.direction} ${Math.round(a.strength)}%</span>
           <span class="alert-time">${a.time.toLocaleTimeString()}</span>
         </div>
         <div class="alert-details">
@@ -512,16 +854,20 @@ class SPYDashboard {
     const contentEl = document.getElementById('alertPopupContent');
     const strengthEl = document.getElementById('alertPopupStrength');
 
+    if (!popup || !tfsEl || !contentEl || !strengthEl) return;
+
     tfsEl.innerHTML = signal.activeTimeframes.map(tf =>
       `<span class="alert-popup-tf">${TF_CONFIG[tf].name}</span>`
     ).join('');
 
     contentEl.innerHTML = `
+      <p><strong>Direction:</strong> ${signal.direction}</p>
       <p><strong>Confluence:</strong> ${signal.activeTimeframes.length}/4 timeframes</p>
-      <p style="margin-top:8px;"><strong>Patterns:</strong> ${patterns.slice(0, 3).map(p => p.name).join(', ')}</p>
+      <p style="margin-top:8px;"><strong>Patterns:</strong> ${patterns.slice(0, 3).map(p => `${p.name} (${p.signal})`).join(', ')}</p>
     `;
 
-    strengthEl.textContent = `${Math.round(signal.strength)}%`;
+    strengthEl.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
+    strengthEl.className = signal.direction.toLowerCase();
 
     popup.classList.add('show');
     setTimeout(() => popup.classList.remove('show'), 10000);
@@ -562,7 +908,8 @@ class SPYDashboard {
 }
 
 function closeAlertPopup() {
-  document.getElementById('alertPopup').classList.remove('show');
+  const popup = document.getElementById('alertPopup');
+  if (popup) popup.classList.remove('show');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
