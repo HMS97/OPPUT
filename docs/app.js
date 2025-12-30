@@ -381,32 +381,69 @@ class SPYDashboard {
 
   generateSPYData(timeframe) {
     const candles = [];
-    let price = 590 + (Math.random() - 0.5) * 10;
+    let price = 590;
     const now = Date.now();
     const intervalMs = timeframe * 60 * 1000;
 
-    for (let i = 0; i < 100; i++) {
-      const volatility = 0.001 * Math.sqrt(timeframe / 5);
-      const trend = Math.random() > 0.5 ? 1 : -1;
-
+    // Phase 1: Uptrend (candles 0-60)
+    for (let i = 0; i < 60; i++) {
       const open = price;
-      const change = price * volatility * (Math.random() - 0.5 + trend * 0.05);
+      const change = price * 0.001 * (0.3 + Math.random() * 0.7);
       const close = open + change;
-      const high = Math.max(open, close) + Math.abs(change) * Math.random() * 0.5;
-      const low = Math.min(open, close) - Math.abs(change) * Math.random() * 0.5;
-
+      const high = close + Math.abs(change) * Math.random() * 0.3;
+      const low = open - Math.abs(change) * Math.random() * 0.2;
       candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
       price = close;
     }
 
-    // Add pattern-forming candles
-    const resistance = candles[candles.length - 1].close * 1.002;
-    for (let i = 0; i < 5; i++) {
-      const open = candles[candles.length - 1].close;
-      const high = resistance + Math.random() * 0.5;
-      const close = resistance - Math.random() * 1;
-      const low = close - Math.random() * 0.3;
-      candles.push({ time: now + i * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
+    // Record the high point
+    const peakPrice = price;
+
+    // Phase 2: First rejection at resistance (candles 60-70)
+    for (let i = 60; i < 70; i++) {
+      const open = price;
+      // Create rejection candles with long upper wicks
+      const high = peakPrice * 1.003 + Math.random() * 0.5;
+      const close = open - price * 0.001 * Math.random();
+      const low = Math.min(open, close) - Math.abs(open - close) * 0.2;
+      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
+      price = close;
+    }
+
+    // Phase 3: Small pullback (candles 70-80)
+    for (let i = 70; i < 80; i++) {
+      const open = price;
+      const change = price * 0.0008 * (Math.random() - 0.6);
+      const close = open + change;
+      const high = Math.max(open, close) + Math.abs(change) * 0.3;
+      const low = Math.min(open, close) - Math.abs(change) * 0.3;
+      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
+      price = close;
+    }
+
+    // Phase 4: Lower high attempt with rejection (candles 80-90)
+    const lowerHighTarget = peakPrice * 0.998; // Lower than previous high
+    for (let i = 80; i < 90; i++) {
+      const open = price;
+      // Push up towards lower high then reject
+      const high = lowerHighTarget + Math.random() * 0.3;
+      const close = open - price * 0.0005 * (1 + Math.random());
+      const low = close - Math.abs(open - close) * 0.2;
+      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
+      price = close;
+    }
+
+    // Phase 5: Recent candles with strong rejection wicks (candles 90-105)
+    for (let i = 90; i < 105; i++) {
+      const open = price;
+      // Create strong rejection patterns - long upper wicks, close near low
+      const wickSize = price * 0.002 * (1 + Math.random());
+      const high = open + wickSize;
+      const body = price * 0.0003 * (1 + Math.random());
+      const close = open - body;
+      const low = close - body * 0.3;
+      candles.push({ time: now - (100 - i) * intervalMs, open, high, low, close, volume: Math.random() * 1000000 });
+      price = close;
     }
 
     return candles;
