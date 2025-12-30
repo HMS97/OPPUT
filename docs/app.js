@@ -67,6 +67,20 @@ class SPYDashboard {
     this.replayChart = null; // Lightweight chart for replay mode
     this.replayCandleSeries = null; // Candle series for replay chart
 
+    // Backtesting data
+    this.backtestTrades = [];
+    this.backtestStats = {
+      totalSignals: 0,
+      putSignals: 0,
+      callSignals: 0,
+      wins: 0,
+      losses: 0,
+      totalProfit: 0
+    };
+
+    // Last known indicator values for display
+    this.lastIndicators = null;
+
     this.init();
   }
 
@@ -494,6 +508,14 @@ class SPYDashboard {
       // Update all patterns list
       this.updateAllPatternsList(allPatterns);
 
+      // Update signal detail panel with indicator values and reasons
+      this.updateSignalDetails(combinedSignal, allPatterns);
+
+      // Track signal for backtesting (in replay mode)
+      if (this.dataMode === 'replay' && combinedSignal.strength >= 50) {
+        this.trackBacktestSignal(combinedSignal, allPatterns, priceData);
+      }
+
       // Trigger alert only for GOOD START POINTS
       // Requires: strength >= 60 AND at least 2 indicator confirmations AND 2+ timeframes
       if (this.isGoodStartPoint(combinedSignal, allPatterns) &&
@@ -571,6 +593,229 @@ class SPYDashboard {
     }
 
     return isGoodStart;
+  }
+
+  /**
+   * Update the signal detail panel with indicator values and signal reasons
+   */
+  updateSignalDetails(combinedSignal, allPatterns) {
+    // Update timestamp
+    const timestampEl = document.getElementById('signalTimestamp');
+    if (timestampEl) {
+      timestampEl.textContent = new Date().toLocaleString();
+    }
+
+    // Get the most recent indicator values from 5m timeframe (most sensitive)
+    const signal5m = this.signals[5];
+    const indicators = signal5m?.indicators || {};
+
+    // Store for reference
+    this.lastIndicators = indicators;
+
+    // Update RSI display
+    const rsiValue = document.getElementById('indRSI');
+    const rsiStatus = document.getElementById('indRSIStatus');
+    if (rsiValue && rsiStatus && indicators.rsi) {
+      rsiValue.textContent = indicators.rsi.value.toFixed(1);
+      rsiStatus.textContent = indicators.rsi.status;
+      rsiStatus.className = 'ind-status ' + (
+        indicators.rsi.status === 'OVERBOUGHT' ? 'bearish' :
+        indicators.rsi.status === 'OVERSOLD' ? 'bullish' : 'neutral'
+      );
+    }
+
+    // Update EMA display
+    const emaValue = document.getElementById('indEMA');
+    const emaStatus = document.getElementById('indEMAStatus');
+    if (emaValue && emaStatus && indicators.ema) {
+      const diff = ((indicators.ema.fast - indicators.ema.slow) / indicators.ema.slow * 100).toFixed(2);
+      emaValue.textContent = `${diff > 0 ? '+' : ''}${diff}%`;
+      emaStatus.textContent = indicators.ema.trend;
+      emaStatus.className = 'ind-status ' + (
+        indicators.ema.trend === 'BULLISH' ? 'bullish' :
+        indicators.ema.trend === 'BEARISH' ? 'bearish' : 'neutral'
+      );
+    }
+
+    // Update MACD display
+    const macdValue = document.getElementById('indMACD');
+    const macdStatus = document.getElementById('indMACDStatus');
+    if (macdValue && macdStatus && indicators.macd) {
+      macdValue.textContent = indicators.macd.histogram?.toFixed(3) || '--';
+      macdStatus.textContent = indicators.macd.momentum;
+      macdStatus.className = 'ind-status ' + (
+        indicators.macd.momentum === 'BULLISH' ? 'bullish' :
+        indicators.macd.momentum === 'BEARISH' ? 'bearish' : 'neutral'
+      );
+    }
+
+    // Update Bollinger Bands display
+    const bbValue = document.getElementById('indBB');
+    const bbStatus = document.getElementById('indBBStatus');
+    if (bbValue && bbStatus && indicators.bollingerBands && this.currentPrice) {
+      const bb = indicators.bollingerBands;
+      const position = ((this.currentPrice - bb.lower) / (bb.upper - bb.lower) * 100).toFixed(0);
+      bbValue.textContent = `${position}%`;
+
+      let bbStatusText = 'MID';
+      let bbStatusClass = 'neutral';
+      if (this.currentPrice >= bb.upper) {
+        bbStatusText = 'UPPER';
+        bbStatusClass = 'bearish';
+      } else if (this.currentPrice <= bb.lower) {
+        bbStatusText = 'LOWER';
+        bbStatusClass = 'bullish';
+      }
+      bbStatus.textContent = bbStatusText;
+      bbStatus.className = 'ind-status ' + bbStatusClass;
+    }
+
+    // Update signal reasons
+    const reasonsEl = document.getElementById('signalReasons');
+    if (!reasonsEl) return;
+
+    if (combinedSignal.direction === 'NEUTRAL' || combinedSignal.strength < 30) {
+      reasonsEl.innerHTML = '<p class="no-signal">No significant signal detected</p>';
+      return;
+    }
+
+    // Filter patterns for the signal direction and sort by strength
+    const strengthOrder = { 'VERY_HIGH': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+    const relevantPatterns = allPatterns
+      .filter(p => p.signal === combinedSignal.direction)
+      .sort((a, b) => (strengthOrder[b.strength] || 0) - (strengthOrder[a.strength] || 0))
+      .slice(0, 6);
+
+    if (relevantPatterns.length === 0) {
+      reasonsEl.innerHTML = '<p class="no-signal">No patterns for this direction</p>';
+      return;
+    }
+
+    reasonsEl.innerHTML = relevantPatterns.map(p => `
+      <div class="reason-item">
+        <span class="reason-icon">${PATTERN_ICONS[p.type] || '📊'}</span>
+        <div class="reason-text">
+          <strong>${p.name}</strong>
+          <span>${p.description}</span>
+        </div>
+        <span class="reason-weight">${p.strength}</span>
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Track a signal for backtesting analysis
+   */
+  trackBacktestSignal(signal, patterns, candles) {
+    if (!candles || candles.length < 2) return;
+
+    const entryPrice = candles[candles.length - 1].close;
+    const entryTime = this.replayDatetime || new Date();
+
+    // Calculate outcome based on next candle movement (simplified)
+    // In real backtesting, you'd wait and check actual outcome
+    const nextCandle = candles[candles.length - 1];
+    const priceMove = nextCandle.close - nextCandle.open;
+
+    let outcome = 'pending';
+    let profit = 0;
+
+    // Determine if the signal direction matches price movement
+    if (signal.direction === 'PUT') {
+      // PUT wins if price goes down
+      if (priceMove < 0) {
+        outcome = 'win';
+        profit = Math.abs(priceMove / entryPrice) * 100;
+      } else if (priceMove > 0) {
+        outcome = 'loss';
+        profit = -Math.abs(priceMove / entryPrice) * 100;
+      }
+      this.backtestStats.putSignals++;
+    } else if (signal.direction === 'CALL') {
+      // CALL wins if price goes up
+      if (priceMove > 0) {
+        outcome = 'win';
+        profit = Math.abs(priceMove / entryPrice) * 100;
+      } else if (priceMove < 0) {
+        outcome = 'loss';
+        profit = -Math.abs(priceMove / entryPrice) * 100;
+      }
+      this.backtestStats.callSignals++;
+    }
+
+    const trade = {
+      time: entryTime,
+      direction: signal.direction,
+      strength: signal.strength,
+      entryPrice: entryPrice,
+      outcome: outcome,
+      profit: profit,
+      patterns: patterns.filter(p => p.signal === signal.direction).map(p => p.name).slice(0, 3)
+    };
+
+    this.backtestTrades.push(trade);
+    this.backtestStats.totalSignals++;
+
+    if (outcome === 'win') this.backtestStats.wins++;
+    if (outcome === 'loss') this.backtestStats.losses++;
+    this.backtestStats.totalProfit += profit;
+
+    // Update display
+    this.updateBacktestDisplay();
+
+    console.log(`[BACKTEST] ${signal.direction} signal at ${entryPrice.toFixed(2)} - ${outcome} (${profit.toFixed(2)}%)`);
+  }
+
+  /**
+   * Update backtest statistics display
+   */
+  updateBacktestDisplay() {
+    const totalEl = document.getElementById('btTotalSignals');
+    const winRateEl = document.getElementById('btWinRate');
+    const avgProfitEl = document.getElementById('btAvgProfit');
+    const putEl = document.getElementById('btPutSignals');
+    const callEl = document.getElementById('btCallSignals');
+
+    if (totalEl) totalEl.textContent = this.backtestStats.totalSignals;
+    if (putEl) putEl.textContent = this.backtestStats.putSignals;
+    if (callEl) callEl.textContent = this.backtestStats.callSignals;
+
+    if (winRateEl) {
+      const total = this.backtestStats.wins + this.backtestStats.losses;
+      if (total > 0) {
+        const rate = (this.backtestStats.wins / total * 100).toFixed(1);
+        winRateEl.textContent = `${rate}%`;
+        winRateEl.className = parseFloat(rate) >= 50 ? 'positive' : 'negative';
+      } else {
+        winRateEl.textContent = '--';
+      }
+    }
+
+    if (avgProfitEl) {
+      if (this.backtestStats.totalSignals > 0) {
+        const avg = (this.backtestStats.totalProfit / this.backtestStats.totalSignals).toFixed(2);
+        avgProfitEl.textContent = `${parseFloat(avg) >= 0 ? '+' : ''}${avg}%`;
+        avgProfitEl.className = parseFloat(avg) >= 0 ? 'positive' : 'negative';
+      } else {
+        avgProfitEl.textContent = '--';
+      }
+    }
+  }
+
+  /**
+   * Reset backtest statistics
+   */
+  resetBacktest() {
+    this.backtestTrades = [];
+    this.backtestStats = {
+      totalSignals: 0,
+      putSignals: 0,
+      callSignals: 0,
+      wins: 0,
+      losses: 0,
+      totalProfit: 0
+    };
+    this.updateBacktestDisplay();
   }
 
   calculateCombinedSignal() {
