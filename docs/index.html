@@ -451,6 +451,248 @@
       background: rgba(255,255,255,0.2);
       border-radius: 3px;
     }
+
+    /* Replay Panel Styles */
+    .replay-panel {
+      display: none;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border: 1px solid rgba(233,69,96,0.3);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+
+    .replay-panel.show {
+      display: block;
+    }
+
+    .replay-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .replay-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #e94560;
+    }
+
+    .replay-close {
+      background: none;
+      border: none;
+      color: #999;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .replay-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .replay-input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .replay-label {
+      font-size: 11px;
+      color: #999;
+      text-transform: uppercase;
+    }
+
+    .replay-input {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    .replay-input:focus {
+      outline: none;
+      border-color: #e94560;
+    }
+
+    .replay-btn {
+      padding: 8px 16px;
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .replay-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(233,69,96,0.4);
+    }
+
+    .replay-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .replay-btn.secondary {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .replay-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+
+    .control-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 50%;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .control-btn:hover {
+      background: rgba(233,69,96,0.3);
+      border-color: #e94560;
+    }
+
+    .control-btn.active {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      border-color: #e94560;
+    }
+
+    .progress-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .progress-bar {
+      height: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      border-radius: 3px;
+      transition: width 0.1s;
+    }
+
+    .progress-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #999;
+    }
+
+    .speed-select {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    /* Results Panel */
+    .results-panel {
+      margin-top: 16px;
+      padding: 16px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+    }
+
+    .results-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #f59e0b;
+    }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+
+    .result-item {
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .result-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .result-value.positive { color: #4ade80; }
+    .result-value.negative { color: #e94560; }
+    .result-value.neutral { color: #f59e0b; }
+
+    .result-label {
+      font-size: 11px;
+      color: #999;
+      margin-top: 4px;
+    }
+
+    .signal-history {
+      margin-top: 12px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .signal-history-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .signal-win {
+      border-left: 3px solid #4ade80;
+    }
+
+    .signal-loss {
+      border-left: 3px solid #e94560;
+    }
+
+    .signal-pending {
+      border-left: 3px solid #f59e0b;
+    }
   </style>
 </head>
 <body>
@@ -474,6 +716,90 @@
         <div style="flex:1"></div>
         <button class="tf-btn" id="replayBtn" data-mode="realtime">🔴 Real-time</button>
       </div>
+      <!-- Replay Panel -->
+      <div class="replay-panel" id="replayPanel">
+        <div class="replay-header">
+          <span class="replay-title">📊 Historical Replay & Verification</span>
+          <button class="replay-close" onclick="closeReplayPanel()">&times;</button>
+        </div>
+
+        <div class="replay-row">
+          <div class="replay-input-group">
+            <span class="replay-label">Start Date</span>
+            <input type="date" class="replay-input" id="replayStartDate">
+          </div>
+          <div class="replay-input-group">
+            <span class="replay-label">Start Time</span>
+            <input type="time" class="replay-input" id="replayStartTime" value="09:30">
+          </div>
+          <div class="replay-input-group">
+            <span class="replay-label">Duration</span>
+            <select class="replay-input" id="replayDuration">
+              <option value="1">1 Hour</option>
+              <option value="2">2 Hours</option>
+              <option value="4" selected>4 Hours</option>
+              <option value="6.5">Full Day (6.5h)</option>
+            </select>
+          </div>
+          <button class="replay-btn" id="loadReplayBtn" onclick="loadReplayData()">
+            Load Data
+          </button>
+        </div>
+
+        <div class="replay-controls" id="replayControls" style="display: none;">
+          <button class="control-btn" id="replayStepBack" title="Step Back">⏮</button>
+          <button class="control-btn" id="replayPlayPause" title="Play/Pause">▶</button>
+          <button class="control-btn" id="replayStepForward" title="Step Forward">⏭</button>
+
+          <div class="progress-container">
+            <div class="progress-bar" id="replayProgressBar">
+              <div class="progress-fill" id="replayProgressFill" style="width: 0%"></div>
+            </div>
+            <div class="progress-info">
+              <span id="replayCurrentTime">--:--</span>
+              <span id="replayCandleCount">0 / 0 candles</span>
+              <span id="replayEndTime">--:--</span>
+            </div>
+          </div>
+
+          <select class="speed-select" id="replaySpeed">
+            <option value="1">1x</option>
+            <option value="2" selected>2x</option>
+            <option value="5">5x</option>
+            <option value="10">10x</option>
+          </select>
+
+          <button class="replay-btn secondary" id="replayReset" onclick="resetReplay()">Reset</button>
+        </div>
+
+        <!-- Results Panel -->
+        <div class="results-panel" id="resultsPanel" style="display: none;">
+          <div class="results-title">📈 Signal Verification Results</div>
+          <div class="results-grid">
+            <div class="result-item">
+              <div class="result-value neutral" id="totalSignals">0</div>
+              <div class="result-label">Total PUT Signals</div>
+            </div>
+            <div class="result-item">
+              <div class="result-value positive" id="winRate">0%</div>
+              <div class="result-label">Win Rate</div>
+            </div>
+            <div class="result-item">
+              <div class="result-value positive" id="winsCount">0</div>
+              <div class="result-label">Profitable (Price Down)</div>
+            </div>
+            <div class="result-item">
+              <div class="result-value negative" id="lossesCount">0</div>
+              <div class="result-label">Losses (Price Up)</div>
+            </div>
+          </div>
+
+          <div class="signal-history" id="signalHistory">
+            <!-- Signal history items will be added here -->
+          </div>
+        </div>
+      </div>
+
       <div class="chart-container" id="chartContainer">
         <!-- TradingView Widget -->
         <div id="tradingview_chart" style="height: 100%;"></div>
