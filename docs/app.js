@@ -261,6 +261,12 @@ class SPYDashboard {
     const meter = document.getElementById(`meter${tfId}`);
     const patternsList = document.getElementById(`patterns${tfId}`);
 
+    // Verify elements exist
+    if (!card || !badge || !meter || !patternsList) {
+      console.warn(`[SPY Dashboard] Missing elements for timeframe ${tfId}`);
+      return;
+    }
+
     // Update card state
     card.classList.toggle('has-signal', signal.strength >= 50);
 
@@ -298,18 +304,22 @@ class SPYDashboard {
 
   updateOverallDisplay(signal, allPatterns) {
     // Update signal value
-    document.getElementById('overallSignalValue').textContent = `${Math.round(signal.strength)}%`;
-    document.getElementById('overallMeter').style.width = `${signal.strength}%`;
+    const signalValueEl = document.getElementById('overallSignalValue');
+    const meterEl = document.getElementById('overallMeter');
+
+    if (signalValueEl) signalValueEl.textContent = `${Math.round(signal.strength)}%`;
+    if (meterEl) meterEl.style.width = `${signal.strength}%`;
 
     // Update confluence dots
     for (const tf of this.timeframes) {
       const tfId = TF_CONFIG[tf].id;
       const dot = document.getElementById(`conf${tfId}`);
-      dot.classList.toggle('active', signal.activeTimeframes.includes(tf));
+      if (dot) dot.classList.toggle('active', signal.activeTimeframes.includes(tf));
     }
 
     // Update status box
     const statusBox = document.getElementById('overallStatus');
+    if (!statusBox) return;
     statusBox.className = 'status-box';
 
     if (signal.strength >= 75) {
@@ -364,14 +374,20 @@ class SPYDashboard {
     const changeEl = document.getElementById('priceChange');
     const percentEl = document.getElementById('priceChangePercent');
 
-    priceEl.textContent = current.close.toFixed(2);
-    priceEl.className = `price-value ${isUp ? 'price-up' : 'price-down'}`;
+    if (priceEl) {
+      priceEl.textContent = current.close.toFixed(2);
+      priceEl.className = `price-value ${isUp ? 'price-up' : 'price-down'}`;
+    }
 
-    changeEl.textContent = `${isUp ? '+' : ''}${change.toFixed(2)}`;
-    changeEl.style.color = isUp ? '#4ade80' : '#e94560';
+    if (changeEl) {
+      changeEl.textContent = `${isUp ? '+' : ''}${change.toFixed(2)}`;
+      changeEl.style.color = isUp ? '#4ade80' : '#e94560';
+    }
 
-    percentEl.textContent = `(${isUp ? '+' : ''}${changePercent.toFixed(2)}%)`;
-    percentEl.style.color = isUp ? '#4ade80' : '#e94560';
+    if (percentEl) {
+      percentEl.textContent = `(${isUp ? '+' : ''}${changePercent.toFixed(2)}%)`;
+      percentEl.style.color = isUp ? '#4ade80' : '#e94560';
+    }
   }
 
   async fetchCandleData(timeframe) {
@@ -539,7 +555,9 @@ class SPYDashboard {
 
   updateConnectionStatus(connected) {
     const dot = document.getElementById('statusDot');
-    dot.style.background = connected ? '#4ade80' : '#e94560';
+    if (dot) {
+      dot.style.background = connected ? '#4ade80' : '#e94560';
+    }
   }
 }
 
