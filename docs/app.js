@@ -36,6 +36,8 @@ class SPYDashboard {
     this.dataCache = {}; // Cache for API responses
     this.cacheExpiry = 30000; // Cache expires after 30 seconds
     this.usingRealData = false; // Track if we're using real data
+    this.replayDatetime = null; // Selected datetime for replay mode
+    this.currentPrice = null; // Current/entry price for target calculation
 
     this.init();
   }
@@ -131,6 +133,20 @@ class SPYDashboard {
       this.refreshInterval = parseInt(e.target.value);
       this.restartMonitoring();
     });
+
+    // Replay controls
+    document.getElementById('replayGoBtn').addEventListener('click', () => {
+      this.runReplay();
+    });
+
+    document.getElementById('replayDatetime').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') this.runReplay();
+    });
+
+    // Set default replay datetime to now
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('replayDatetime').value = now.toISOString().slice(0, 16);
   }
 
   setDataMode(mode) {
@@ -138,6 +154,39 @@ class SPYDashboard {
     document.getElementById('realtimeBtn').classList.toggle('active', mode === 'realtime');
     document.getElementById('replayBtn').classList.toggle('active', mode === 'replay');
     document.getElementById('statusText').textContent = mode === 'realtime' ? 'Live' : 'Replay';
+
+    // Show/hide replay controls
+    const replayControls = document.getElementById('replayControls');
+    if (replayControls) {
+      replayControls.style.display = mode === 'replay' ? 'flex' : 'none';
+    }
+
+    // Clear cache when switching modes
+    this.dataCache = {};
+
+    if (mode === 'realtime') {
+      this.replayDatetime = null;
+      this.restartMonitoring();
+    } else {
+      // Stop auto-refresh in replay mode
+      if (this.scanTimer) clearInterval(this.scanTimer);
+    }
+  }
+
+  async runReplay() {
+    const datetimeInput = document.getElementById('replayDatetime').value;
+    if (!datetimeInput) {
+      alert('Please select a date and time');
+      return;
+    }
+
+    this.replayDatetime = new Date(datetimeInput);
+    this.dataCache = {}; // Clear cache
+
+    document.getElementById('statusText').textContent = `Replay: ${this.replayDatetime.toLocaleString()}`;
+
+    // Run single scan for the selected datetime
+    await this.performScan();
   }
 
   setChartTimeframe(tf) {
@@ -338,6 +387,79 @@ class SPYDashboard {
       statusBox.classList.add('status-none');
       statusBox.textContent = 'Monitoring...';
     }
+
+    // Update target price if signal is strong enough
+    this.updateTargetPrice(signal.strength);
+  }
+
+  calculateTargetPrice(candles, signalStrength) {
+    if (!candles || candles.length < 20 || !this.currentPrice) {
+      return null;
+    }
+
+    // Calculate ATR (Average True Range) for volatility-based target
+    let atrSum = 0;
+    for (let i = 1; i < Math.min(14, candles.length); i++) {
+      const high = candles[candles.length - i].high;
+      const low = candles[candles.length - i].low;
+      const prevClose = candles[candles.length - i - 1].close;
+      const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
+      atrSum += tr;
+    }
+    const atr = atrSum / 14;
+
+    // Find recent support levels (swing lows)
+    const recentCandles = candles.slice(-50);
+    const lows = recentCandles.map(c => c.low);
+    const sortedLows = [...lows].sort((a, b) => a - b);
+    const supportLevel = sortedLows[Math.floor(sortedLows.length * 0.1)]; // 10th percentile
+
+    // Calculate target based on signal strength
+    // Stronger signal = larger target move
+    const strengthMultiplier = signalStrength >= 75 ? 2.0 : signalStrength >= 50 ? 1.5 : 1.0;
+    const atrTarget = this.currentPrice - (atr * strengthMultiplier);
+
+    // Use the more conservative of ATR target or support level
+    const targetPrice = Math.max(atrTarget, supportLevel);
+
+    return {
+      target: targetPrice,
+      atr: atr,
+      support: supportLevel,
+      distance: ((this.currentPrice - targetPrice) / this.currentPrice) * 100
+    };
+  }
+
+  updateTargetPrice(signalStrength) {
+    const targetSection = document.getElementById('targetPriceSection');
+    const targetPriceEl = document.getElementById('targetPrice');
+    const targetDistanceEl = document.getElementById('targetDistance');
+
+    if (!targetSection) return;
+
+    // Only show target when signal is meaningful
+    if (signalStrength < 30 || !this.currentPrice) {
+      targetSection.style.display = 'none';
+      return;
+    }
+
+    // Get candles from cache for calculation
+    const cacheKey = 'spy_5';
+    const cached = this.dataCache[cacheKey];
+    if (!cached) {
+      targetSection.style.display = 'none';
+      return;
+    }
+
+    const result = this.calculateTargetPrice(cached.data, signalStrength);
+    if (!result) {
+      targetSection.style.display = 'none';
+      return;
+    }
+
+    targetSection.style.display = 'block';
+    targetPriceEl.textContent = result.target.toFixed(2);
+    targetDistanceEl.textContent = `-${result.distance.toFixed(2)}%`;
   }
 
   updateAllPatternsList(patterns) {
@@ -368,6 +490,9 @@ class SPYDashboard {
 
     const current = candles[candles.length - 1];
     const previous = candles[candles.length - 2];
+
+    // Store current price for target calculation
+    this.currentPrice = current.close;
 
     const change = current.close - previous.close;
     const changePercent = (change / previous.close) * 100;
@@ -436,17 +561,26 @@ class SPYDashboard {
   async fetchRealSPYData(timeframe) {
     // Map timeframe to Yahoo Finance parameters
     const tfConfig = {
-      5: { interval: '5m', range: '1d' },
-      15: { interval: '15m', range: '5d' },
-      60: { interval: '60m', range: '1mo' },
-      240: { interval: '1d', range: '3mo' }  // 4h not available, use daily
+      5: { interval: '5m', range: '1d', lookback: 1 },
+      15: { interval: '15m', range: '5d', lookback: 5 },
+      60: { interval: '60m', range: '1mo', lookback: 30 },
+      240: { interval: '1d', range: '3mo', lookback: 90 }  // 4h not available, use daily
     };
 
     const config = tfConfig[timeframe] || tfConfig[5];
     const symbol = 'SPY';
 
-    // Yahoo Finance API endpoint
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&range=${config.range}`;
+    let url;
+
+    // Use period1/period2 for replay mode to get historical data
+    if (this.replayDatetime) {
+      const endTime = Math.floor(this.replayDatetime.getTime() / 1000);
+      const startTime = endTime - (config.lookback * 24 * 60 * 60);
+      url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&period1=${startTime}&period2=${endTime}`;
+    } else {
+      // Real-time: use range parameter
+      url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&range=${config.range}`;
+    }
 
     // Multiple CORS proxies for reliability
     const corsProxies = [
