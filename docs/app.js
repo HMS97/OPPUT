@@ -38,6 +38,8 @@ class SPYDashboard {
     this.usingRealData = false; // Track if we're using real data
     this.replayDatetime = null; // Selected datetime for replay mode
     this.currentPrice = null; // Current/entry price for target calculation
+    this.replayChart = null; // Lightweight chart for replay mode
+    this.replayCandleSeries = null; // Candle series for replay chart
 
     this.init();
   }
@@ -161,6 +163,14 @@ class SPYDashboard {
       replayControls.style.display = mode === 'replay' ? 'flex' : 'none';
     }
 
+    // Switch between TradingView and Replay chart
+    const tvChart = document.getElementById('tradingview_chart');
+    const replayChartEl = document.getElementById('replay_chart');
+    if (tvChart && replayChartEl) {
+      tvChart.style.display = mode === 'realtime' ? 'block' : 'none';
+      replayChartEl.style.display = mode === 'replay' ? 'block' : 'none';
+    }
+
     // Clear cache when switching modes
     this.dataCache = {};
 
@@ -170,7 +180,73 @@ class SPYDashboard {
     } else {
       // Stop auto-refresh in replay mode
       if (this.scanTimer) clearInterval(this.scanTimer);
+      // Initialize replay chart if needed
+      this.initReplayChart();
     }
+  }
+
+  initReplayChart() {
+    if (this.replayChart) return; // Already initialized
+
+    const container = document.getElementById('replay_chart');
+    if (!container || typeof LightweightCharts === 'undefined') {
+      console.warn('[SPY Dashboard] Lightweight Charts not available');
+      return;
+    }
+
+    this.replayChart = LightweightCharts.createChart(container, {
+      layout: {
+        background: { type: 'solid', color: '#1a1a2e' },
+        textColor: '#999'
+      },
+      grid: {
+        vertLines: { color: 'rgba(255,255,255,0.05)' },
+        horzLines: { color: 'rgba(255,255,255,0.05)' }
+      },
+      crosshair: {
+        mode: LightweightCharts.CrosshairMode.Normal
+      },
+      rightPriceScale: {
+        borderColor: 'rgba(255,255,255,0.1)'
+      },
+      timeScale: {
+        borderColor: 'rgba(255,255,255,0.1)',
+        timeVisible: true,
+        secondsVisible: false
+      }
+    });
+
+    this.replayCandleSeries = this.replayChart.addCandlestickSeries({
+      upColor: '#4ade80',
+      downColor: '#e94560',
+      borderUpColor: '#4ade80',
+      borderDownColor: '#e94560',
+      wickUpColor: '#4ade80',
+      wickDownColor: '#e94560'
+    });
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      if (this.replayChart && this.dataMode === 'replay') {
+        this.replayChart.applyOptions({ width: container.clientWidth });
+      }
+    });
+  }
+
+  updateReplayChart(candles) {
+    if (!this.replayCandleSeries || !candles || candles.length === 0) return;
+
+    // Convert candles to Lightweight Charts format
+    const chartData = candles.map(c => ({
+      time: Math.floor(c.time / 1000), // Convert ms to seconds
+      open: c.open,
+      high: c.high,
+      low: c.low,
+      close: c.close
+    }));
+
+    this.replayCandleSeries.setData(chartData);
+    this.replayChart.timeScale().fitContent();
   }
 
   async runReplay() {
@@ -189,14 +265,24 @@ class SPYDashboard {
     await this.performScan();
   }
 
-  setChartTimeframe(tf) {
+  async setChartTimeframe(tf) {
     this.currentChartTF = tf;
     document.querySelectorAll('.chart-tab').forEach(btn => {
       btn.classList.toggle('active', parseInt(btn.dataset.tf) === tf);
     });
 
-    if (this.widget && this.widget.chart) {
-      this.widget.chart().setResolution(TF_CONFIG[tf].interval);
+    if (this.dataMode === 'realtime') {
+      // Update TradingView chart
+      if (this.widget && this.widget.chart) {
+        this.widget.chart().setResolution(TF_CONFIG[tf].interval);
+      }
+    } else {
+      // Update replay chart with selected timeframe data
+      const cacheKey = `spy_${tf}`;
+      const cached = this.dataCache[cacheKey];
+      if (cached && cached.data) {
+        this.updateReplayChart(cached.data);
+      }
     }
   }
 
@@ -246,6 +332,11 @@ class SPYDashboard {
       // Update price display
       if (priceData) {
         this.updatePriceDisplay(priceData);
+
+        // Update replay chart if in replay mode
+        if (this.dataMode === 'replay') {
+          this.updateReplayChart(priceData);
+        }
       }
 
       // Update each timeframe card
