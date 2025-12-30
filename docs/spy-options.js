@@ -21,7 +21,12 @@ class SPYOptionsAnalyzer {
   }
 
   async init() {
+    console.log('[SPY Options] Initializing...');
     this.bindEvents();
+
+    // Small delay to ensure DOM is ready
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     await this.loadData();
     this.startAutoRefresh();
   }
@@ -50,19 +55,23 @@ class SPYOptionsAnalyzer {
 
   async loadData() {
     this.updateStatus('Loading...');
+    console.log('[SPY Options] Loading data...');
 
     try {
       // Fetch spot price first
       await this.fetchSpotPrice();
+      console.log('[SPY Options] Spot price loaded:', this.spotPrice);
 
       // Fetch available expiries
       await this.fetchExpiries();
+      console.log('[SPY Options] Expiries loaded:', this.availableExpiries.length);
 
       // Select appropriate expiry based on type
       this.selectExpiry();
 
       // Fetch options chain for selected expiry
       await this.fetchOptionsChain();
+      console.log('[SPY Options] Options chain loaded');
 
       // Calculate and display all metrics
       this.calculateMetrics();
@@ -70,11 +79,13 @@ class SPYOptionsAnalyzer {
       this.renderOptionsChain();
 
       this.updateStatus('Live Data');
+      console.log('[SPY Options] Data loaded successfully');
     } catch (error) {
       console.error('[SPY Options] Error loading data:', error);
-      this.updateStatus('Error - Retrying...');
+      this.updateStatus('Demo Data');
 
       // Try with demo data
+      console.log('[SPY Options] Loading demo data as fallback...');
       this.loadDemoData();
     }
   }
@@ -84,30 +95,40 @@ class SPYOptionsAnalyzer {
 
     const proxies = [
       (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+      (u) => `https://thingproxy.freeboard.io/fetch/${u}`
     ];
 
+    let lastError = null;
     for (const proxyFn of proxies) {
       try {
-        const response = await fetch(proxyFn(url));
+        const proxyUrl = proxyFn(url);
+        console.log('[SPY Options] Trying proxy for spot price...');
+        const response = await fetch(proxyUrl, { timeout: 10000 });
         if (response.ok) {
           const data = await response.json();
-          const result = data.chart.result[0];
-          const quotes = result.indicators.quote[0];
-          const meta = result.meta;
+          if (data.chart?.result?.[0]) {
+            const result = data.chart.result[0];
+            const quotes = result.indicators.quote[0];
+            const meta = result.meta;
 
-          this.spotPrice = meta.regularMarketPrice;
-          this.prevClose = meta.previousClose || quotes.close[quotes.close.length - 2];
+            this.spotPrice = meta.regularMarketPrice;
+            this.prevClose = meta.previousClose || quotes.close[quotes.close.length - 2];
 
-          this.updatePriceDisplay();
-          return;
+            this.updatePriceDisplay();
+            console.log('[SPY Options] Spot price fetched successfully');
+            return;
+          }
         }
       } catch (e) {
+        lastError = e;
+        console.log('[SPY Options] Proxy failed, trying next...');
         continue;
       }
     }
 
-    throw new Error('Failed to fetch spot price');
+    throw new Error(`Failed to fetch spot price: ${lastError?.message || 'All proxies failed'}`);
   }
 
   async fetchExpiries() {
@@ -115,12 +136,16 @@ class SPYOptionsAnalyzer {
 
     const proxies = [
       (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+      (u) => `https://thingproxy.freeboard.io/fetch/${u}`
     ];
 
+    let lastError = null;
     for (const proxyFn of proxies) {
       try {
-        const response = await fetch(proxyFn(url));
+        console.log('[SPY Options] Trying proxy for expiries...');
+        const response = await fetch(proxyFn(url), { timeout: 10000 });
         if (response.ok) {
           const data = await response.json();
           if (data.optionChain?.result?.[0]?.expirationDates) {
@@ -130,11 +155,12 @@ class SPYOptionsAnalyzer {
           }
         }
       } catch (e) {
+        lastError = e;
         continue;
       }
     }
 
-    throw new Error('Failed to fetch expiries');
+    throw new Error(`Failed to fetch expiries: ${lastError?.message || 'All proxies failed'}`);
   }
 
   selectExpiry() {
@@ -188,12 +214,16 @@ class SPYOptionsAnalyzer {
 
     const proxies = [
       (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+      (u) => `https://thingproxy.freeboard.io/fetch/${u}`
     ];
 
+    let lastError = null;
     for (const proxyFn of proxies) {
       try {
-        const response = await fetch(proxyFn(url));
+        console.log('[SPY Options] Trying proxy for options chain...');
+        const response = await fetch(proxyFn(url), { timeout: 15000 });
         if (response.ok) {
           const data = await response.json();
           if (data.optionChain?.result?.[0]) {
@@ -203,11 +233,12 @@ class SPYOptionsAnalyzer {
           }
         }
       } catch (e) {
+        lastError = e;
         continue;
       }
     }
 
-    throw new Error('Failed to fetch options chain');
+    throw new Error(`Failed to fetch options chain: ${lastError?.message || 'All proxies failed'}`);
   }
 
   calculateMetrics() {
@@ -430,9 +461,17 @@ class SPYOptionsAnalyzer {
   }
 
   renderOIChart() {
-    if (!this.metrics) return;
+    if (!this.metrics) {
+      console.warn('[SPY Options] No metrics available for chart');
+      return;
+    }
 
     const container = document.getElementById('oiDistChart');
+    if (!container) {
+      console.warn('[SPY Options] Chart container not found');
+      return;
+    }
+
     container.innerHTML = '';
 
     const { sortedStrikes, callOIByStrike, putOIByStrike, maxPainStrike } = this.metrics;
@@ -442,11 +481,22 @@ class SPYOptionsAnalyzer {
     const maxStrike = this.spotPrice * 1.08;
     const filteredStrikes = sortedStrikes.filter(s => s >= minStrike && s <= maxStrike);
 
-    // Create canvas for chart
+    if (filteredStrikes.length === 0) {
+      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;">No strike data available</div>';
+      return;
+    }
+
+    // Create canvas for chart - use explicit dimensions if container size is 0
     const canvas = document.createElement('canvas');
-    canvas.width = container.clientWidth;
-    canvas.height = container.clientHeight;
+    const containerWidth = container.clientWidth || container.offsetWidth || 800;
+    const containerHeight = container.clientHeight || container.offsetHeight || 280;
+    canvas.width = containerWidth;
+    canvas.height = containerHeight;
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
     container.appendChild(canvas);
+
+    console.log(`[SPY Options] Rendering chart: ${canvas.width}x${canvas.height}, ${filteredStrikes.length} strikes`);
 
     const ctx = canvas.getContext('2d');
     const padding = { top: 20, right: 20, bottom: 40, left: 60 };
