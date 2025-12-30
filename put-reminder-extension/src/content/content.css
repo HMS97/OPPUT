@@ -1,12 +1,13 @@
 /**
  * Styles for PUT Pattern Reminder floating indicator
+ * Multi-timeframe version
  */
 
 #put-pattern-indicator {
   position: fixed;
   top: 80px;
   right: 20px;
-  width: 200px;
+  width: 220px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
@@ -27,7 +28,9 @@
 #put-pattern-indicator.ppr-minimized .ppr-signal,
 #put-pattern-indicator.ppr-minimized .ppr-patterns,
 #put-pattern-indicator.ppr-minimized .ppr-actions,
-#put-pattern-indicator.ppr-minimized .ppr-title {
+#put-pattern-indicator.ppr-minimized .ppr-title,
+#put-pattern-indicator.ppr-minimized .ppr-data-source,
+#put-pattern-indicator.ppr-minimized .ppr-timeframes {
   display: none;
 }
 
@@ -44,7 +47,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px;
+  padding: 10px 12px;
   background: linear-gradient(90deg, #e94560, #ff6b6b);
   cursor: grab;
   user-select: none;
@@ -70,45 +73,99 @@
   50% { opacity: 0.5; }
 }
 
+/* Data source badge */
+.ppr-data-source {
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: center;
+}
+
+.ppr-ds-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: rgba(233, 69, 96, 0.2);
+  border-radius: 4px;
+  color: #ff6b6b;
+}
+
+/* Timeframes display */
+.ppr-timeframes {
+  padding: 8px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ppr-tf-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  background: rgba(74, 222, 128, 0.2);
+  border-radius: 4px;
+  color: #4ade80;
+}
+
 .ppr-signal {
-  padding: 12px;
+  padding: 10px 12px;
   text-align: center;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .ppr-signal-text {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #999;
 }
 
 .ppr-patterns {
-  padding: 8px 12px;
-  max-height: 100px;
+  padding: 6px 10px;
+  max-height: 120px;
   overflow-y: auto;
 }
 
 .ppr-pattern-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 11px;
-  padding: 4px 8px;
-  background: rgba(233, 69, 96, 0.2);
+  padding: 5px 8px;
+  background: rgba(233, 69, 96, 0.15);
   border-radius: 4px;
   margin-bottom: 4px;
-  color: #e94560;
+}
+
+.ppr-pattern-name {
+  color: #eee;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ppr-pattern-tf {
+  font-size: 9px;
+  padding: 2px 5px;
+  background: rgba(233, 69, 96, 0.3);
+  border-radius: 3px;
+  color: #ff6b6b;
+  margin-left: 6px;
+  flex-shrink: 0;
 }
 
 .ppr-actions {
   display: flex;
   padding: 8px;
-  gap: 8px;
+  gap: 6px;
 }
 
 .ppr-btn {
   flex: 1;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border: none;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -123,10 +180,11 @@
 }
 
 .ppr-close {
-  width: 32px;
+  width: 28px;
   flex: none;
   background: rgba(255, 255, 255, 0.1);
   color: white;
+  font-size: 14px;
 }
 
 .ppr-close:hover {
@@ -172,7 +230,7 @@
     top: auto;
     bottom: 20px;
     right: 10px;
-    left: 10px;
-    width: auto;
+    left: auto;
+    width: 200px;
   }
 }

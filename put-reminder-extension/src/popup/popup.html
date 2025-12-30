@@ -12,8 +12,8 @@
     }
 
     body {
-      width: 360px;
-      min-height: 400px;
+      width: 380px;
+      min-height: 480px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
       color: #eee;
@@ -178,7 +178,7 @@
     }
 
     .patterns-list {
-      max-height: 150px;
+      max-height: 120px;
       overflow-y: auto;
     }
 
@@ -218,6 +218,14 @@
       font-size: 11px;
     }
 
+    .pattern-tf {
+      font-size: 10px;
+      padding: 2px 6px;
+      background: rgba(233, 69, 96, 0.3);
+      border-radius: 4px;
+      color: #ff6b6b;
+    }
+
     .settings-panel {
       padding: 16px;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
@@ -251,6 +259,91 @@
 
     .setting-select option {
       background: #1a1a2e;
+    }
+
+    /* Timeframe checkboxes */
+    .timeframe-group {
+      margin-bottom: 16px;
+    }
+
+    .timeframe-label {
+      font-size: 13px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .timeframe-options {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tf-checkbox {
+      display: none;
+    }
+
+    .tf-label {
+      display: inline-block;
+      padding: 8px 16px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .tf-label:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .tf-checkbox:checked + .tf-label {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      border-color: #e94560;
+      color: white;
+    }
+
+    /* Data source toggle */
+    .data-source-group {
+      margin-bottom: 16px;
+    }
+
+    .data-source-options {
+      display: flex;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      padding: 4px;
+    }
+
+    .ds-radio {
+      display: none;
+    }
+
+    .ds-label {
+      flex: 1;
+      text-align: center;
+      padding: 10px 16px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+
+    .ds-label:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .ds-radio:checked + .ds-label {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      color: white;
+    }
+
+    .ds-icon {
+      display: block;
+      font-size: 16px;
+      margin-bottom: 4px;
     }
 
     .btn {
@@ -312,6 +405,15 @@
       font-size: 10px;
     }
 
+    .alert-tf {
+      display: inline-block;
+      font-size: 10px;
+      padding: 2px 6px;
+      background: rgba(233, 69, 96, 0.3);
+      border-radius: 4px;
+      margin-left: 6px;
+    }
+
     footer {
       text-align: center;
       padding: 12px;
@@ -319,18 +421,34 @@
       color: #666;
       border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
+
+    /* Active timeframes display */
+    .active-timeframes {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+
+    .active-tf-badge {
+      font-size: 10px;
+      padding: 3px 8px;
+      background: rgba(74, 222, 128, 0.2);
+      border-radius: 4px;
+      color: #4ade80;
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>PUT Pattern Reminder</h1>
-    <p>Smart Short Position Alert System</p>
+    <p>多周期做空信号提醒系统</p>
   </div>
 
   <div class="status-bar">
     <div class="status-indicator">
       <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">Monitoring...</span>
+      <span id="statusText">监控中...</span>
     </div>
     <label class="toggle-switch">
       <input type="checkbox" id="enableToggle" checked>
@@ -341,39 +459,75 @@
   <div class="signal-panel">
     <div class="signal-card">
       <div class="signal-header">
-        <span class="signal-title">Current Signal</span>
-        <span class="signal-strength none" id="signalBadge">No Signal</span>
+        <span class="signal-title">当前信号 Signal</span>
+        <span class="signal-strength none" id="signalBadge">无信号</span>
       </div>
       <div class="signal-meter">
         <div class="signal-meter-fill" id="signalMeter" style="width: 0%"></div>
       </div>
       <p id="recommendation" style="font-size: 13px; color: #999;">
-        Open TradingView or Binance to start monitoring...
+        打开 TradingView 或 Binance 开始监控...
       </p>
+      <div class="active-timeframes" id="activeTimeframes"></div>
     </div>
 
     <div id="patternsContainer">
       <div class="no-signal">
         <div class="no-signal-icon">📊</div>
-        <p>No patterns detected yet</p>
+        <p>暂无检测到的形态</p>
       </div>
     </div>
   </div>
 
   <div class="settings-panel">
-    <div class="settings-title">Settings</div>
+    <div class="settings-title">设置 Settings</div>
+
+    <!-- Data Source Toggle -->
+    <div class="data-source-group">
+      <span class="setting-label" style="display: block; margin-bottom: 8px;">数据源 Data Source</span>
+      <div class="data-source-options">
+        <input type="radio" name="dataSource" id="dsRealtime" value="realtime" class="ds-radio" checked>
+        <label for="dsRealtime" class="ds-label">
+          <span class="ds-icon">🔴</span>
+          实时 Real-time
+        </label>
+        <input type="radio" name="dataSource" id="dsReplay" value="replay" class="ds-radio">
+        <label for="dsReplay" class="ds-label">
+          <span class="ds-icon">⏪</span>
+          回放 Replay
+        </label>
+      </div>
+    </div>
+
+    <!-- Timeframe Selection -->
+    <div class="timeframe-group">
+      <span class="timeframe-label">时间周期 Timeframe (可多选)</span>
+      <div class="timeframe-options">
+        <input type="checkbox" id="tf5m" value="5" class="tf-checkbox" checked>
+        <label for="tf5m" class="tf-label">5分钟</label>
+
+        <input type="checkbox" id="tf15m" value="15" class="tf-checkbox" checked>
+        <label for="tf15m" class="tf-label">15分钟</label>
+
+        <input type="checkbox" id="tf1h" value="60" class="tf-checkbox">
+        <label for="tf1h" class="tf-label">1小时</label>
+
+        <input type="checkbox" id="tf4h" value="240" class="tf-checkbox">
+        <label for="tf4h" class="tf-label">4小时</label>
+      </div>
+    </div>
 
     <div class="setting-row">
-      <span class="setting-label">Alert Sensitivity</span>
+      <span class="setting-label">灵敏度 Sensitivity</span>
       <select class="setting-select" id="sensitivity">
-        <option value="low">Low</option>
-        <option value="medium" selected>Medium</option>
-        <option value="high">High</option>
+        <option value="low">低 Low</option>
+        <option value="medium" selected>中 Medium</option>
+        <option value="high">高 High</option>
       </select>
     </div>
 
     <div class="setting-row">
-      <span class="setting-label">Sound Alert</span>
+      <span class="setting-label">声音提醒 Sound</span>
       <label class="toggle-switch" style="width: 40px; height: 20px;">
         <input type="checkbox" id="soundToggle" checked>
         <span class="toggle-slider" style="border-radius: 20px;"></span>
@@ -381,32 +535,32 @@
     </div>
 
     <div class="setting-row">
-      <span class="setting-label">Auto Refresh</span>
+      <span class="setting-label">刷新间隔 Refresh</span>
       <select class="setting-select" id="refreshInterval">
-        <option value="5">5 seconds</option>
-        <option value="10" selected>10 seconds</option>
-        <option value="30">30 seconds</option>
-        <option value="60">1 minute</option>
+        <option value="5">5秒</option>
+        <option value="10" selected>10秒</option>
+        <option value="30">30秒</option>
+        <option value="60">1分钟</option>
       </select>
     </div>
 
     <button class="btn btn-primary" id="scanNow">
-      Scan Now
+      立即扫描 Scan Now
     </button>
     <button class="btn btn-secondary" id="clearAlerts">
-      Clear Alert History
+      清除历史 Clear History
     </button>
   </div>
 
   <div class="alert-history" id="alertHistory">
-    <div class="settings-title">Recent Alerts</div>
+    <div class="settings-title">最近提醒 Recent Alerts</div>
     <div id="alertList">
-      <p style="color: #666; font-size: 12px; text-align: center;">No recent alerts</p>
+      <p style="color: #666; font-size: 12px; text-align: center;">暂无提醒记录</p>
     </div>
   </div>
 
   <footer>
-    PUT Pattern Reminder v1.0 | Made for traders
+    PUT Pattern Reminder v1.1 | 多周期版
   </footer>
 
   <script src="popup.js"></script>

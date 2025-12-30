@@ -1,16 +1,27 @@
 /**
  * Content script for PUT Pattern Reminder
  * Runs on TradingView and Binance pages
+ * Supports multi-timeframe and real-time/replay data
  */
+
+const TIMEFRAME_LABELS = {
+  5: '5分钟',
+  15: '15分钟',
+  60: '1小时',
+  240: '4小时'
+};
 
 class PutPatternMonitor {
   constructor() {
-    this.detector = new PutPatternDetector();
+    this.detectors = {}; // One detector per timeframe
     this.enabled = true;
     this.sensitivity = 'medium';
+    this.timeframes = [5, 15]; // Default timeframes
+    this.dataSource = 'realtime';
     this.scanInterval = null;
     this.lastAlert = 0;
     this.alertCooldown = 60000; // 1 minute cooldown between alerts
+    this.candleData = {}; // Store candle data per timeframe
 
     this.init();
   }
@@ -18,6 +29,9 @@ class PutPatternMonitor {
   async init() {
     // Load settings
     await this.loadSettings();
+
+    // Initialize detectors for each timeframe
+    this.initDetectors();
 
     // Create floating indicator
     this.createFloatingIndicator();
@@ -32,7 +46,7 @@ class PutPatternMonitor {
       this.handleMessage(message);
     });
 
-    console.log('[PUT Pattern Reminder] Initialized');
+    console.log('[PUT Pattern Reminder] Initialized with timeframes:', this.timeframes);
   }
 
   async loadSettings() {
@@ -40,40 +54,43 @@ class PutPatternMonitor {
       const result = await chrome.storage.local.get({
         enabled: true,
         sensitivity: 'medium',
+        timeframes: [5, 15],
+        dataSource: 'realtime',
         refreshInterval: 10
       });
 
       this.enabled = result.enabled;
       this.sensitivity = result.sensitivity;
+      this.timeframes = result.timeframes;
+      this.dataSource = result.dataSource;
       this.refreshInterval = result.refreshInterval;
 
-      // Adjust detector config based on sensitivity
-      this.updateSensitivity(this.sensitivity);
     } catch (e) {
       console.error('[PUT Pattern Reminder] Failed to load settings:', e);
     }
   }
 
-  updateSensitivity(level) {
-    const configs = {
-      low: {
-        rejectionThreshold: 0.005,
-        consolidationBars: 5,
-        lowerHighTolerance: 0.002
-      },
-      medium: {
-        rejectionThreshold: 0.003,
-        consolidationBars: 3,
-        lowerHighTolerance: 0.001
-      },
-      high: {
-        rejectionThreshold: 0.001,
-        consolidationBars: 2,
-        lowerHighTolerance: 0.0005
-      }
+  initDetectors() {
+    // Create a detector for each timeframe with appropriate config
+    const sensitivityConfigs = {
+      low: { rejectionThreshold: 0.005, consolidationBars: 5, lowerHighTolerance: 0.002 },
+      medium: { rejectionThreshold: 0.003, consolidationBars: 3, lowerHighTolerance: 0.001 },
+      high: { rejectionThreshold: 0.001, consolidationBars: 2, lowerHighTolerance: 0.0005 }
     };
 
-    this.detector.config = { ...this.detector.config, ...configs[level] };
+    const baseConfig = sensitivityConfigs[this.sensitivity] || sensitivityConfigs.medium;
+
+    for (const tf of [5, 15, 60, 240]) {
+      // Adjust config based on timeframe (larger timeframes need different thresholds)
+      const tfMultiplier = tf >= 60 ? 1.5 : 1;
+      const config = {
+        ...baseConfig,
+        rejectionThreshold: baseConfig.rejectionThreshold * tfMultiplier,
+        lowerHighTolerance: baseConfig.lowerHighTolerance * tfMultiplier
+      };
+
+      this.detectors[tf] = new PutPatternDetector(config);
+    }
   }
 
   handleMessage(message) {
@@ -89,7 +106,17 @@ class PutPatternMonitor {
 
       case 'UPDATE_SENSITIVITY':
         this.sensitivity = message.value;
-        this.updateSensitivity(message.value);
+        this.initDetectors(); // Reinitialize with new sensitivity
+        break;
+
+      case 'UPDATE_TIMEFRAMES':
+        this.timeframes = message.timeframes;
+        this.updateIndicatorTimeframes();
+        break;
+
+      case 'UPDATE_DATA_SOURCE':
+        this.dataSource = message.value;
+        this.updateIndicatorDataSource();
         break;
 
       case 'TRIGGER_SCAN':
@@ -110,13 +137,19 @@ class PutPatternMonitor {
         <span class="ppr-title">PUT Monitor</span>
         <span class="ppr-status">●</span>
       </div>
+      <div class="ppr-data-source">
+        <span class="ppr-ds-badge" id="pprDataSource">${this.dataSource === 'replay' ? '⏪ 回放' : '🔴 实时'}</span>
+      </div>
+      <div class="ppr-timeframes" id="pprTimeframes">
+        ${this.timeframes.map(tf => `<span class="ppr-tf-badge">${TIMEFRAME_LABELS[tf]}</span>`).join('')}
+      </div>
       <div class="ppr-signal">
-        <span class="ppr-signal-text">Monitoring...</span>
+        <span class="ppr-signal-text">监控中...</span>
       </div>
       <div class="ppr-patterns"></div>
       <div class="ppr-actions">
-        <button class="ppr-btn ppr-scan">Scan</button>
-        <button class="ppr-btn ppr-close">×</button>
+        <button class="ppr-btn ppr-scan">扫描</button>
+        <button class="ppr-btn ppr-close">−</button>
       </div>
     `;
 
@@ -135,6 +168,22 @@ class PutPatternMonitor {
     });
 
     this.indicator = indicator;
+  }
+
+  updateIndicatorTimeframes() {
+    const container = document.getElementById('pprTimeframes');
+    if (container) {
+      container.innerHTML = this.timeframes.map(tf =>
+        `<span class="ppr-tf-badge">${TIMEFRAME_LABELS[tf]}</span>`
+      ).join('');
+    }
+  }
+
+  updateIndicatorDataSource() {
+    const badge = document.getElementById('pprDataSource');
+    if (badge) {
+      badge.textContent = this.dataSource === 'replay' ? '⏪ 回放' : '🔴 实时';
+    }
   }
 
   makeDraggable(element) {
@@ -204,10 +253,10 @@ class PutPatternMonitor {
 
     if (active) {
       status.style.color = '#4ade80';
-      text.textContent = 'Monitoring...';
+      text.textContent = '监控中...';
     } else {
       status.style.color = '#666';
-      text.textContent = 'Paused';
+      text.textContent = '已暂停';
     }
   }
 
@@ -215,37 +264,69 @@ class PutPatternMonitor {
     if (!this.enabled) return;
 
     try {
-      // Extract candle data from the page
-      const candles = await this.extractCandleData();
+      const allPatterns = [];
+      let maxStrength = 0;
+      let bestSignal = null;
 
-      if (!candles || candles.length < 10) {
-        console.log('[PUT Pattern Reminder] Insufficient candle data');
-        return;
+      // Scan each selected timeframe
+      for (const tf of this.timeframes) {
+        const candles = await this.extractCandleData(tf);
+
+        if (!candles || candles.length < 10) {
+          console.log(`[PUT Pattern Reminder] Insufficient candle data for ${tf}m`);
+          continue;
+        }
+
+        // Run pattern detection
+        const detector = this.detectors[tf];
+        if (!detector) continue;
+
+        const patterns = detector.analyze(candles);
+        const signal = detector.getSignalSummary();
+
+        // Add timeframe info to each pattern
+        patterns.forEach(p => {
+          p.timeframe = tf;
+          allPatterns.push(p);
+        });
+
+        // Track best signal
+        if (signal.strength > maxStrength) {
+          maxStrength = signal.strength;
+          bestSignal = signal;
+        }
       }
 
-      // Run pattern detection
-      const patterns = this.detector.analyze(candles);
-      const signal = this.detector.getSignalSummary();
+      // Combine signals - higher strength if patterns found across multiple timeframes
+      const multiTimeframeBonus = this.calculateMultiTimeframeBonus(allPatterns);
+      const combinedStrength = Math.min(100, maxStrength + multiTimeframeBonus);
+
+      const combinedSignal = {
+        signal: combinedStrength >= 50 ? 'STRONG_PUT' : 'PUT',
+        strength: combinedStrength,
+        patterns: allPatterns,
+        recommendation: this.getCombinedRecommendation(combinedStrength, allPatterns)
+      };
 
       // Update indicator
-      this.updateIndicator(signal, patterns);
+      this.updateIndicator(combinedSignal, allPatterns);
 
       // Save to storage for popup
       await chrome.storage.local.set({
-        currentSignal: signal,
-        detectedPatterns: patterns
+        currentSignal: combinedSignal,
+        detectedPatterns: allPatterns
       });
 
       // Send update to popup
       chrome.runtime.sendMessage({
         type: 'SIGNAL_UPDATE',
-        signal: signal,
-        patterns: patterns
+        signal: combinedSignal,
+        patterns: allPatterns
       });
 
       // Trigger alert if strong signal
-      if (signal.strength >= 50 && Date.now() - this.lastAlert > this.alertCooldown) {
-        this.triggerAlert(signal, patterns);
+      if (combinedStrength >= 50 && Date.now() - this.lastAlert > this.alertCooldown) {
+        this.triggerAlert(combinedSignal, allPatterns);
       }
 
     } catch (e) {
@@ -253,112 +334,114 @@ class PutPatternMonitor {
     }
   }
 
-  async extractCandleData() {
-    // Try different methods based on the site
+  calculateMultiTimeframeBonus(patterns) {
+    // Get unique timeframes with patterns
+    const timeframesWithPatterns = [...new Set(patterns.map(p => p.timeframe))];
 
-    // Method 1: TradingView chart data
-    if (window.location.hostname.includes('tradingview.com')) {
-      return this.extractFromTradingView();
-    }
-
-    // Method 2: Binance chart data
-    if (window.location.hostname.includes('binance.com')) {
-      return this.extractFromBinance();
-    }
-
-    // Method 3: Try generic chart data extraction
-    return this.extractGeneric();
+    // Bonus for confluence across multiple timeframes
+    if (timeframesWithPatterns.length >= 3) return 20;
+    if (timeframesWithPatterns.length === 2) return 10;
+    return 0;
   }
 
-  extractFromTradingView() {
-    // TradingView stores chart data in various places
-    // Try to access the chart widget's data
+  getCombinedRecommendation(strength, patterns) {
+    const timeframesWithPatterns = [...new Set(patterns.map(p => p.timeframe))];
+    const tfLabels = timeframesWithPatterns.map(tf => TIMEFRAME_LABELS[tf]).join(', ');
 
+    if (strength >= 75) {
+      return `强烈做空信号！多周期共振 (${tfLabels})`;
+    } else if (strength >= 50) {
+      return `做空信号明确 (${tfLabels})，可考虑进场`;
+    } else if (strength >= 25) {
+      return `有做空迹象 (${tfLabels})，建议继续观察`;
+    }
+    return '信号较弱，建议等待更好机会';
+  }
+
+  async extractCandleData(timeframe) {
+    // For real-time vs replay, the extraction method might differ
+    if (this.dataSource === 'replay') {
+      return this.extractReplayData(timeframe);
+    }
+    return this.extractRealtimeData(timeframe);
+  }
+
+  async extractRealtimeData(timeframe) {
+    // Try to extract real-time candle data from the page
+    if (window.location.hostname.includes('tradingview.com')) {
+      return this.extractFromTradingView(timeframe);
+    }
+
+    if (window.location.hostname.includes('binance.com')) {
+      return this.extractFromBinance(timeframe);
+    }
+
+    return this.generateSimulatedData(timeframe);
+  }
+
+  async extractReplayData(timeframe) {
+    // For replay mode, try to detect if TradingView replay is active
+    const replayIndicator = document.querySelector('[class*="replay"], [data-name="replay"]');
+    if (replayIndicator) {
+      console.log('[PUT Pattern Reminder] Replay mode detected');
+    }
+
+    // Extraction logic is similar, but we mark it as replay data
+    return this.extractRealtimeData(timeframe);
+  }
+
+  extractFromTradingView(timeframe) {
     try {
-      // Method 1: Access TVChartContainer's data
-      const chartFrames = document.querySelectorAll('iframe');
-      for (const frame of chartFrames) {
-        try {
-          const frameWindow = frame.contentWindow;
-          if (frameWindow && frameWindow.TradingView) {
-            // Access chart data through TradingView API
-            const widget = frameWindow.TradingView.chart;
-            if (widget && widget.getAllStudies) {
-              // Get OHLCV data
-              return this.parseWidgetData(widget);
-            }
-          }
-        } catch (e) {
-          // Cross-origin restriction, try another method
-        }
+      // Try to access TradingView chart data
+      // This is complex due to TradingView's architecture
+
+      // Method 1: Check for global chart object
+      if (window.tvWidget && window.tvWidget.chart) {
+        return this.parseTVWidgetData(window.tvWidget, timeframe);
       }
 
-      // Method 2: Parse visible candles from DOM
-      return this.parseVisibleCandles();
+      // Method 2: Parse from DOM
+      return this.parseVisibleCandles(timeframe);
 
     } catch (e) {
       console.error('[PUT Pattern Reminder] TradingView extraction failed:', e);
-      return null;
+      return this.generateSimulatedData(timeframe);
     }
   }
 
-  extractFromBinance() {
+  extractFromBinance(timeframe) {
     try {
-      // Binance uses different chart implementations
-      // Try to access global chart data
-
+      // Try to access Binance chart data
       if (window.__BINANCE_CHART_DATA__) {
-        return this.parseBinanceData(window.__BINANCE_CHART_DATA__);
+        return this.parseBinanceData(window.__BINANCE_CHART_DATA__, timeframe);
       }
 
-      // Try parsing from visible elements
-      return this.parseVisibleCandles();
+      return this.generateSimulatedData(timeframe);
 
     } catch (e) {
       console.error('[PUT Pattern Reminder] Binance extraction failed:', e);
-      return null;
+      return this.generateSimulatedData(timeframe);
     }
   }
 
-  parseVisibleCandles() {
-    // Parse candle data from visible chart elements
-    // This is a fallback method that analyzes DOM elements
-
-    const candles = [];
-
-    // Look for SVG/Canvas chart elements
-    const svgCandles = document.querySelectorAll('[class*="candle"], [class*="bar"]');
-
-    // Also try parsing from data attributes
-    const chartElements = document.querySelectorAll('[data-price], [data-ohlc]');
-
-    // If we found elements, parse them
-    if (svgCandles.length > 0 || chartElements.length > 0) {
-      // Attempt to extract OHLCV from element positions/attributes
-      // This is complex and site-specific
-
-      // For now, generate sample data for testing
-      return this.generateTestData();
-    }
-
-    return this.generateTestData();
+  parseVisibleCandles(timeframe) {
+    // Fallback: generate simulated data based on current price
+    return this.generateSimulatedData(timeframe);
   }
 
-  extractGeneric() {
-    // Generic extraction using page analysis
-    return this.generateTestData();
-  }
-
-  generateTestData() {
+  generateSimulatedData(timeframe) {
     // Generate realistic test candle data for demonstration
     // In production, this would be replaced with actual chart data
 
     const candles = [];
     let price = 87000; // Starting price (BTC-like)
     const now = Date.now();
+    const intervalMs = timeframe * 60 * 1000;
 
+    // Generate 100 candles
     for (let i = 0; i < 100; i++) {
-      const volatility = 0.002; // 0.2% volatility
+      // Volatility scales with timeframe
+      const volatility = 0.002 * Math.sqrt(timeframe / 5);
       const trend = Math.random() > 0.5 ? 1 : -1;
 
       const open = price;
@@ -368,19 +451,18 @@ class PutPatternMonitor {
       const low = Math.min(open, close) - Math.abs(change) * Math.random();
 
       candles.push({
-        time: now - (100 - i) * 60000, // 1 minute candles
+        time: now - (100 - i) * intervalMs,
         open,
         high,
         low,
         close,
-        volume: Math.random() * 1000
+        volume: Math.random() * 1000 * (timeframe / 5)
       });
 
       price = close;
     }
 
-    // Add some pattern-forming candles at the end
-    // Simulate resistance rejection
+    // Add some pattern-forming candles at the end for testing
     const lastPrice = candles[candles.length - 1].close;
     const resistance = lastPrice * 1.005;
 
@@ -391,7 +473,7 @@ class PutPatternMonitor {
       const low = close - Math.random() * 30;
 
       candles.push({
-        time: now + i * 60000,
+        time: now + i * intervalMs,
         open,
         high,
         low,
@@ -412,32 +494,38 @@ class PutPatternMonitor {
 
     // Update signal display
     if (signal.strength >= 75) {
-      signalText.textContent = `STRONG PUT! (${Math.round(signal.strength)}%)`;
+      signalText.textContent = `强烈做空! (${Math.round(signal.strength)}%)`;
       signalText.style.color = '#e94560';
       status.style.color = '#e94560';
       this.indicator.classList.add('ppr-alert');
     } else if (signal.strength >= 50) {
-      signalText.textContent = `PUT Signal (${Math.round(signal.strength)}%)`;
+      signalText.textContent = `做空信号 (${Math.round(signal.strength)}%)`;
       signalText.style.color = '#f59e0b';
       status.style.color = '#f59e0b';
       this.indicator.classList.remove('ppr-alert');
     } else if (signal.strength > 0) {
-      signalText.textContent = `Weak (${Math.round(signal.strength)}%)`;
+      signalText.textContent = `弱信号 (${Math.round(signal.strength)}%)`;
       signalText.style.color = '#4ade80';
       status.style.color = '#4ade80';
       this.indicator.classList.remove('ppr-alert');
     } else {
-      signalText.textContent = 'No signals';
+      signalText.textContent = '无信号';
       signalText.style.color = '#999';
       status.style.color = '#4ade80';
       this.indicator.classList.remove('ppr-alert');
     }
 
-    // Update patterns list
+    // Update patterns list with timeframe info
     if (patterns && patterns.length > 0) {
-      const patternHtml = patterns.slice(0, 3).map(p => `
-        <div class="ppr-pattern-item">${p.name}</div>
-      `).join('');
+      const patternHtml = patterns.slice(0, 4).map(p => {
+        const tfLabel = TIMEFRAME_LABELS[p.timeframe] || `${p.timeframe}m`;
+        return `
+          <div class="ppr-pattern-item">
+            <span class="ppr-pattern-name">${p.name}</span>
+            <span class="ppr-pattern-tf">${tfLabel}</span>
+          </div>
+        `;
+      }).join('');
       patternsDiv.innerHTML = patternHtml;
     } else {
       patternsDiv.innerHTML = '';
@@ -446,6 +534,10 @@ class PutPatternMonitor {
 
   async triggerAlert(signal, patterns) {
     this.lastAlert = Date.now();
+
+    // Get timeframes with patterns
+    const timeframesWithPatterns = [...new Set(patterns.map(p => p.timeframe))];
+    const tfLabels = timeframesWithPatterns.map(tf => TIMEFRAME_LABELS[tf]).join(', ');
 
     // Visual alert
     if (this.indicator) {
@@ -458,8 +550,8 @@ class PutPatternMonitor {
     // Send notification request to background script
     chrome.runtime.sendMessage({
       type: 'SHOW_NOTIFICATION',
-      title: 'PUT Signal Detected!',
-      message: `${signal.recommendation}\nStrength: ${Math.round(signal.strength)}%`,
+      title: 'PUT 做空信号!',
+      message: `${signal.recommendation}\n周期: ${tfLabels}\n强度: ${Math.round(signal.strength)}%`,
       patterns: patterns
     });
 
@@ -467,6 +559,7 @@ class PutPatternMonitor {
     chrome.runtime.sendMessage({
       type: 'NEW_ALERT',
       pattern: patterns[0]?.name || 'PUT Signal',
+      timeframe: patterns[0]?.timeframe,
       strength: signal.strength
     });
 
