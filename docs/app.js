@@ -256,10 +256,33 @@ class SPYDashboard {
       return;
     }
 
-    this.replayDatetime = new Date(datetimeInput);
+    // Parse datetime-local input properly (it's in local time)
+    // Format: "2024-01-15T14:30"
+    const [datePart, timePart] = datetimeInput.split('T');
+    const [year, month, day] = datePart.split('-').map(Number);
+    const [hours, minutes] = timePart.split(':').map(Number);
+
+    // Create date in local timezone
+    this.replayDatetime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+    // Validate date is not in the future
+    if (this.replayDatetime > new Date()) {
+      alert('Cannot replay future dates');
+      return;
+    }
+
+    // Validate date is not too old (Yahoo Finance 5m data limited to ~60 days)
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 58);
+    if (this.replayDatetime < sixtyDaysAgo) {
+      alert('Date too old. Yahoo Finance only provides 5-minute data for the last 60 days.');
+      return;
+    }
+
     this.dataCache = {}; // Clear cache
 
     document.getElementById('statusText').textContent = `Replay: ${this.replayDatetime.toLocaleString()}`;
+    console.log(`[SPY Dashboard] Replay datetime: ${this.replayDatetime.toISOString()}, Unix: ${Math.floor(this.replayDatetime.getTime() / 1000)}`);
 
     // Run single scan for the selected datetime
     await this.performScan();
@@ -333,9 +356,15 @@ class SPYDashboard {
       if (priceData) {
         this.updatePriceDisplay(priceData);
 
-        // Update replay chart if in replay mode
+        // Update replay chart if in replay mode with selected timeframe data
         if (this.dataMode === 'replay') {
-          this.updateReplayChart(priceData);
+          const chartCacheKey = `spy_${this.currentChartTF}`;
+          const chartData = this.dataCache[chartCacheKey];
+          if (chartData && chartData.data) {
+            this.updateReplayChart(chartData.data);
+          } else {
+            this.updateReplayChart(priceData);
+          }
         }
       }
 
@@ -651,11 +680,12 @@ class SPYDashboard {
 
   async fetchRealSPYData(timeframe) {
     // Map timeframe to Yahoo Finance parameters
+    // Lookback in days - need enough candles for pattern detection (~100+ candles)
     const tfConfig = {
-      5: { interval: '5m', range: '1d', lookback: 1 },
-      15: { interval: '15m', range: '5d', lookback: 5 },
-      60: { interval: '60m', range: '1mo', lookback: 30 },
-      240: { interval: '1d', range: '3mo', lookback: 90 }  // 4h not available, use daily
+      5: { interval: '5m', range: '5d', lookback: 5 },      // 5 days = ~390 candles
+      15: { interval: '15m', range: '1mo', lookback: 15 },  // 15 days = ~390 candles
+      60: { interval: '60m', range: '3mo', lookback: 60 },  // 60 days = ~480 candles
+      240: { interval: '1d', range: '1y', lookback: 180 }   // 180 days = ~180 candles
     };
 
     const config = tfConfig[timeframe] || tfConfig[5];
@@ -668,6 +698,7 @@ class SPYDashboard {
       const endTime = Math.floor(this.replayDatetime.getTime() / 1000);
       const startTime = endTime - (config.lookback * 24 * 60 * 60);
       url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&period1=${startTime}&period2=${endTime}`;
+      console.log(`[SPY Dashboard] Replay fetch: ${new Date(startTime * 1000).toISOString()} to ${new Date(endTime * 1000).toISOString()}`);
     } else {
       // Real-time: use range parameter
       url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&range=${config.range}`;
@@ -742,7 +773,13 @@ class SPYDashboard {
       }
     }
 
-    console.log(`[SPY Dashboard] Fetched ${candles.length} real candles for ${timeframe}m`);
+    if (candles.length > 0) {
+      const firstCandle = candles[0];
+      const lastCandle = candles[candles.length - 1];
+      console.log(`[SPY Dashboard] Fetched ${candles.length} candles for ${timeframe}m: ${new Date(firstCandle.time).toLocaleString()} to ${new Date(lastCandle.time).toLocaleString()}, last price: ${lastCandle.close.toFixed(2)}`);
+    } else {
+      console.log(`[SPY Dashboard] No candles returned for ${timeframe}m`);
+    }
     return candles;
   }
 
