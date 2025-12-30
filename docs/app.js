@@ -410,8 +410,10 @@ class SPYDashboard {
       // Update all patterns list
       this.updateAllPatternsList(allPatterns);
 
-      // Trigger alert if needed
-      if (combinedSignal.strength >= 50 && Date.now() - this.lastAlertTime > this.alertCooldown) {
+      // Trigger alert only for GOOD START POINTS
+      // Requires: strength >= 60 AND at least 2 indicator confirmations AND 2+ timeframes
+      if (this.isGoodStartPoint(combinedSignal, allPatterns) &&
+          Date.now() - this.lastAlertTime > this.alertCooldown) {
         this.triggerAlert(combinedSignal, allPatterns);
       }
 
@@ -420,10 +422,79 @@ class SPYDashboard {
     }
   }
 
+  /**
+   * Determine if current signal is a GOOD START POINT for entry
+   * Based on 2025 best practices: multiple indicator confluence required
+   */
+  isGoodStartPoint(signal, patterns) {
+    // Must have minimum strength
+    if (signal.strength < 60) return false;
+
+    // Must have at least 2 timeframes confirming
+    if (signal.activeTimeframes.length < 2) return false;
+
+    // Count indicator-based patterns for the dominant direction
+    const indicatorTypes = [
+      'RSI_OVERBOUGHT', 'RSI_OVERSOLD', 'RSI_BEARISH_DIVERGENCE', 'RSI_BULLISH_DIVERGENCE',
+      'BB_UPPER_TOUCH', 'BB_LOWER_TOUCH', 'BB_SQUEEZE_BULLISH', 'BB_SQUEEZE_BEARISH',
+      'EMA_BULLISH_CROSS', 'EMA_BEARISH_CROSS',
+      'MACD_BULLISH_CROSS', 'MACD_BEARISH_CROSS', 'MACD_HIST_BULLISH', 'MACD_HIST_BEARISH',
+      'VOLUME_SPIKE_BULLISH', 'VOLUME_SPIKE_BEARISH'
+    ];
+
+    const priceActionTypes = [
+      'LOWER_HIGH', 'HIGHER_LOW', 'REJECTION_AT_RESISTANCE', 'REJECTION_AT_SUPPORT',
+      'FALSE_BREAKOUT', 'FALSE_BREAKOUT_DOWN', 'ABSORPTION', 'ABSORPTION_BUYING',
+      'DOUBLE_REJECTION', 'DOUBLE_REJECTION_BOTTOM'
+    ];
+
+    // Filter patterns matching signal direction
+    const directionPatterns = patterns.filter(p => p.signal === signal.direction);
+
+    // Count indicator confirmations
+    let indicatorCount = 0;
+    let priceActionCount = 0;
+    const seenIndicatorCategories = new Set();
+
+    for (const p of directionPatterns) {
+      if (indicatorTypes.includes(p.type)) {
+        // Count unique indicator categories (RSI, BB, EMA, MACD, VOLUME)
+        const category = p.type.split('_')[0];
+        if (!seenIndicatorCategories.has(category)) {
+          seenIndicatorCategories.add(category);
+          indicatorCount++;
+        }
+      }
+      if (priceActionTypes.includes(p.type)) {
+        priceActionCount++;
+      }
+    }
+
+    // GOOD START POINT criteria:
+    // Option A: At least 2 different indicator categories confirming
+    // Option B: 1 indicator + 2 price action patterns
+    // Option C: Very high strength (75+) with any indicator confirmation
+    const hasIndicatorConfluence = indicatorCount >= 2;
+    const hasMixedConfluence = indicatorCount >= 1 && priceActionCount >= 2;
+    const hasStrongSignal = signal.strength >= 75 && indicatorCount >= 1;
+
+    const isGoodStart = hasIndicatorConfluence || hasMixedConfluence || hasStrongSignal;
+
+    if (isGoodStart) {
+      console.log(`[GOOD START POINT] ${signal.direction} ${signal.strength.toFixed(0)}% - ` +
+        `Indicators: ${indicatorCount} (${Array.from(seenIndicatorCategories).join(', ')}), ` +
+        `Price Action: ${priceActionCount}, TFs: ${signal.activeTimeframes.length}`);
+    }
+
+    return isGoodStart;
+  }
+
   calculateCombinedSignal() {
     let putWeight = 0;
     let callWeight = 0;
     let activeTimeframes = [];
+    let totalIndicatorCount = 0;
+    let indicatorCategories = new Set();
 
     for (const tf of this.timeframes) {
       const signal = this.signals[tf];
@@ -433,6 +504,18 @@ class SPYDashboard {
           putWeight += signal.putWeight || signal.strength;
         } else if (signal.direction === 'CALL') {
           callWeight += signal.callWeight || signal.strength;
+        }
+
+        // Track indicator counts from V2 signals
+        if (signal.putIndicatorCount) totalIndicatorCount += signal.putIndicatorCount;
+        if (signal.callIndicatorCount) totalIndicatorCount += signal.callIndicatorCount;
+
+        // Track indicator summary
+        if (signal.indicators) {
+          if (signal.indicators.rsi) indicatorCategories.add('RSI');
+          if (signal.indicators.ema) indicatorCategories.add('EMA');
+          if (signal.indicators.macd) indicatorCategories.add('MACD');
+          if (signal.indicators.bollingerBands) indicatorCategories.add('BB');
         }
       }
     }
@@ -449,11 +532,15 @@ class SPYDashboard {
       dominantWeight = callWeight;
     }
 
-    // Confluence bonus
+    // Confluence bonus - enhanced with indicator bonus
     let confluenceBonus = 0;
     if (activeTimeframes.length >= 4) confluenceBonus = 25;
     else if (activeTimeframes.length === 3) confluenceBonus = 15;
     else if (activeTimeframes.length === 2) confluenceBonus = 10;
+
+    // Additional indicator confluence bonus
+    if (indicatorCategories.size >= 3) confluenceBonus += 10;
+    else if (indicatorCategories.size >= 2) confluenceBonus += 5;
 
     // Calculate combined strength based on dominance
     const totalWeight = putWeight + callWeight;
@@ -467,7 +554,9 @@ class SPYDashboard {
       activeTimeframes,
       putWeight,
       callWeight,
-      confluenceBonus
+      confluenceBonus,
+      indicatorCount: totalIndicatorCount,
+      indicatorCategories: Array.from(indicatorCategories)
     };
   }
 
@@ -1062,10 +1151,30 @@ class SPYDashboard {
       `<span class="alert-popup-tf">${TF_CONFIG[tf].name}</span>`
     ).join('');
 
+    // Get indicator patterns for display
+    const indicatorPatterns = patterns.filter(p =>
+      p.signal === signal.direction && (
+        p.type.startsWith('RSI_') || p.type.startsWith('BB_') ||
+        p.type.startsWith('EMA_') || p.type.startsWith('MACD_') ||
+        p.type.startsWith('VOLUME_')
+      )
+    );
+
+    const pricePatterns = patterns.filter(p =>
+      p.signal === signal.direction && !indicatorPatterns.includes(p)
+    );
+
     contentEl.innerHTML = `
+      <p style="color:#4ade80;font-weight:bold;">GOOD START POINT</p>
       <p><strong>Direction:</strong> ${signal.direction}</p>
-      <p><strong>Confluence:</strong> ${signal.activeTimeframes.length}/4 timeframes</p>
-      <p style="margin-top:8px;"><strong>Patterns:</strong> ${patterns.slice(0, 3).map(p => `${p.name} (${p.signal})`).join(', ')}</p>
+      <p><strong>Timeframes:</strong> ${signal.activeTimeframes.length}/4 aligned</p>
+      ${signal.indicatorCategories && signal.indicatorCategories.length > 0 ?
+        `<p><strong>Indicators:</strong> ${signal.indicatorCategories.join(', ')}</p>` : ''}
+      <p style="margin-top:8px;"><strong>Key Signals:</strong></p>
+      <ul style="margin:4px 0 0 16px;padding:0;font-size:11px;">
+        ${indicatorPatterns.slice(0, 3).map(p => `<li>${p.name}</li>`).join('')}
+        ${pricePatterns.slice(0, 2).map(p => `<li>${p.name}</li>`).join('')}
+      </ul>
     `;
 
     strengthEl.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
