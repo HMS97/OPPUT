@@ -805,6 +805,11 @@
         <div class="status-dot" id="statusDot"></div>
         <span id="statusText">Live</span>
       </div>
+      <!-- Replay Controls -->
+      <div id="replayControls" style="display:none;align-items:center;gap:8px;">
+        <input type="datetime-local" id="replayDatetime" class="setting-select" style="padding:6px 10px;">
+        <button id="replayGoBtn" class="backtest-btn start" style="padding:6px 14px;font-size:12px;">Go</button>
+      </div>
     </div>
   </header>
 
@@ -950,6 +955,7 @@
         </div>
         <div class="chart-container" id="chartContainer">
           <div id="tradingview_chart" style="height:100%"></div>
+          <div id="replay_chart" style="height:100%;display:none;"></div>
         </div>
       </div>
 
@@ -1018,6 +1024,8 @@
 
   <!-- TradingView -->
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <!-- Lightweight Charts for Replay -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
   <!-- Pattern Detection -->
   <script src="patterns.js"></script>
   <!-- App -->

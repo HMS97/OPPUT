@@ -163,19 +163,26 @@ class SPYDashboard {
       this.restartMonitoring();
     });
 
-    // Replay controls
-    document.getElementById('replayGoBtn').addEventListener('click', () => {
-      this.runReplay();
-    });
+    // Replay controls (with null checks)
+    const replayGoBtn = document.getElementById('replayGoBtn');
+    const replayDatetime = document.getElementById('replayDatetime');
 
-    document.getElementById('replayDatetime').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') this.runReplay();
-    });
+    if (replayGoBtn) {
+      replayGoBtn.addEventListener('click', () => {
+        this.runReplay();
+      });
+    }
 
-    // Set default replay datetime to now
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('replayDatetime').value = now.toISOString().slice(0, 16);
+    if (replayDatetime) {
+      replayDatetime.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') this.runReplay();
+      });
+
+      // Set default replay datetime to now
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      replayDatetime.value = now.toISOString().slice(0, 16);
+    }
   }
 
   setDataMode(mode) {
