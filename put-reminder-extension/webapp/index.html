@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPY PUT Alert Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0f;
+      color: #eee;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: linear-gradient(90deg, #1a1a2e, #16213e);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .header h1 {
+      font-size: 24px;
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(74, 222, 128, 0.1);
+      border-radius: 20px;
+      font-size: 14px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #4ade80;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .main-container {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 20px;
+      padding: 20px;
+      height: calc(100vh - 70px);
+    }
+
+    .chart-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .chart-container {
+      flex: 1;
+      background: #1a1a2e;
+      border-radius: 12px;
+      overflow: hidden;
+      min-height: 500px;
+    }
+
+    .timeframe-bar {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      background: #1a1a2e;
+      border-radius: 12px;
+    }
+
+    .tf-btn {
+      padding: 8px 20px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #999;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tf-btn:hover {
+      background: rgba(255,255,255,0.1);
+    }
+
+    .tf-btn.active {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      border-color: #e94560;
+      color: white;
+    }
+
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .card-title {
+      font-size: 14px;
+      color: #999;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Price Display */
+    .price-display {
+      text-align: center;
+      padding: 20px 0;
+    }
+
+    .current-price {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .price-up { color: #4ade80; }
+    .price-down { color: #e94560; }
+
+    .price-change {
+      font-size: 18px;
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+    }
+
+    /* Signal Meter */
+    .signal-meter-container {
+      padding: 16px 0;
+    }
+
+    .signal-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .signal-value {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .signal-meter {
+      height: 12px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .signal-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4ade80, #f59e0b, #e94560);
+      border-radius: 6px;
+      transition: width 0.3s ease;
+    }
+
+    .signal-status {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .signal-none { background: rgba(102,102,102,0.2); color: #999; }
+    .signal-weak { background: rgba(74,222,128,0.2); color: #4ade80; }
+    .signal-medium { background: rgba(245,158,11,0.2); color: #f59e0b; }
+    .signal-strong { background: rgba(233,69,96,0.2); color: #e94560; }
+
+    /* Patterns List */
+    .patterns-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .pattern-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      border-left: 3px solid #e94560;
+    }
+
+    .pattern-icon {
+      font-size: 20px;
+    }
+
+    .pattern-info {
+      flex: 1;
+    }
+
+    .pattern-name {
+      font-weight: 600;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+
+    .pattern-desc {
+      font-size: 11px;
+      color: #999;
+    }
+
+    .pattern-tf {
+      font-size: 10px;
+      padding: 3px 8px;
+      background: rgba(233,69,96,0.2);
+      border-radius: 4px;
+      color: #ff6b6b;
+    }
+
+    /* Alert History */
+    .alert-list {
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .alert-item {
+      padding: 12px;
+      background: rgba(233,69,96,0.1);
+      border-left: 3px solid #e94560;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 8px;
+    }
+
+    .alert-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .alert-type {
+      font-weight: 600;
+      color: #e94560;
+    }
+
+    .alert-time {
+      font-size: 11px;
+      color: #666;
+    }
+
+    .alert-details {
+      font-size: 12px;
+      color: #999;
+    }
+
+    /* Settings */
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .setting-row:last-child {
+      border-bottom: none;
+    }
+
+    .setting-label {
+      font-size: 13px;
+    }
+
+    .setting-select {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 22px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #333;
+      border-radius: 22px;
+      transition: 0.3s;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .toggle-slider {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(22px);
+    }
+
+    /* Alert Popup */
+    .alert-popup {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 350px;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border: 2px solid #e94560;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 0 40px rgba(233,69,96,0.4);
+      z-index: 1000;
+      animation: slideIn 0.3s ease, glow 1s ease-in-out infinite alternate;
+      display: none;
+    }
+
+    .alert-popup.show {
+      display: block;
+    }
+
+    @keyframes slideIn {
+      from { transform: translateX(100%); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+
+    @keyframes glow {
+      from { box-shadow: 0 0 20px rgba(233,69,96,0.4); }
+      to { box-shadow: 0 0 40px rgba(233,69,96,0.8); }
+    }
+
+    .alert-popup-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .alert-popup-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #e94560;
+    }
+
+    .alert-popup-close {
+      background: none;
+      border: none;
+      color: #999;
+      font-size: 24px;
+      cursor: pointer;
+    }
+
+    .alert-popup-content {
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .alert-popup-strength {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-top: 16px;
+      padding: 12px;
+      background: rgba(233,69,96,0.1);
+      border-radius: 8px;
+    }
+
+    .alert-popup-strength-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #e94560;
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(255,255,255,0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.2);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>SPY PUT Alert Dashboard</h1>
+    <div class="header-right">
+      <div class="status-badge">
+        <div class="status-dot" id="connectionStatus"></div>
+        <span id="connectionText">Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <section class="chart-section">
+      <div class="timeframe-bar">
+        <button class="tf-btn active" data-tf="5">5m</button>
+        <button class="tf-btn" data-tf="15">15m</button>
+        <button class="tf-btn" data-tf="60">1H</button>
+        <button class="tf-btn" data-tf="240">4H</button>
+        <div style="flex:1"></div>
+        <button class="tf-btn" id="replayBtn" data-mode="realtime">🔴 Real-time</button>
+      </div>
+      <div class="chart-container" id="chartContainer">
+        <!-- TradingView Widget -->
+        <div id="tradingview_chart" style="height: 100%;"></div>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+      <!-- Price Card -->
+      <div class="card">
+        <div class="card-title">SPY Price</div>
+        <div class="price-display">
+          <div class="current-price price-up" id="currentPrice">---.--</div>
+          <div class="price-change">
+            <span id="priceChange">+0.00</span>
+            <span id="priceChangePercent">(+0.00%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Signal Meter -->
+      <div class="card">
+        <div class="card-title">PUT Signal Strength</div>
+        <div class="signal-meter-container">
+          <div class="signal-label">
+            <span>Signal</span>
+            <span class="signal-value" id="signalValue">0%</span>
+          </div>
+          <div class="signal-meter">
+            <div class="signal-meter-fill" id="signalMeter" style="width: 0%"></div>
+          </div>
+          <div class="signal-status signal-none" id="signalStatus">
+            Monitoring...
+          </div>
+        </div>
+      </div>
+
+      <!-- Detected Patterns -->
+      <div class="card">
+        <div class="card-title">Detected Patterns</div>
+        <div class="patterns-list" id="patternsList">
+          <p style="color: #666; text-align: center; padding: 20px;">
+            No patterns detected
+          </p>
+        </div>
+      </div>
+
+      <!-- Alert History -->
+      <div class="card">
+        <div class="card-title">Alert History</div>
+        <div class="alert-list" id="alertList">
+          <p style="color: #666; text-align: center; padding: 20px;">
+            No alerts yet
+          </p>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="card">
+        <div class="card-title">Settings</div>
+        <div class="setting-row">
+          <span class="setting-label">Sensitivity</span>
+          <select class="setting-select" id="sensitivity">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Sound Alert</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="soundToggle" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <span class="setting-label">Auto Refresh</span>
+          <select class="setting-select" id="refreshInterval">
+            <option value="5">5 sec</option>
+            <option value="10" selected>10 sec</option>
+            <option value="30">30 sec</option>
+          </select>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Alert Popup -->
+  <div class="alert-popup" id="alertPopup">
+    <div class="alert-popup-header">
+      <span class="alert-popup-title">🔻 PUT SIGNAL!</span>
+      <button class="alert-popup-close" onclick="closeAlertPopup()">&times;</button>
+    </div>
+    <div class="alert-popup-content" id="alertPopupContent">
+      Strong PUT signal detected on SPY
+    </div>
+    <div class="alert-popup-strength">
+      <span class="alert-popup-strength-value" id="alertPopupStrength">75%</span>
+      <span>Signal Strength</span>
+    </div>
+  </div>
+
+  <!-- TradingView Widget Script -->
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+
+  <!-- Pattern Detection Library -->
+  <script src="../src/lib/patterns.js"></script>
+
+  <!-- Main App Script -->
+  <script src="app.js"></script>
+</body>
+</html>
