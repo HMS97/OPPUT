@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPY Options Analysis - 0DTE/1DTE/Weekly</title>
+  <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0a0a0f;
+      color: #eee;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: linear-gradient(90deg, #1a1a2e, #16213e);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .nav-link {
+      padding: 6px 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: #999;
+      text-decoration: none;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: rgba(59, 130, 246, 0.1);
+      border-radius: 20px;
+      font-size: 13px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #3b82f6;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .expiry-toggle {
+      display: flex;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      padding: 3px;
+    }
+
+    .expiry-btn {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      color: #999;
+      font-size: 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+
+    .expiry-btn.active {
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      color: white;
+    }
+
+    .expiry-btn:hover:not(.active) {
+      color: #fff;
+    }
+
+    /* Main Layout */
+    .main-container {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Summary Section */
+    .summary-section {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border-radius: 16px;
+      padding: 20px 24px;
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      gap: 24px;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .summary-price {
+      text-align: center;
+    }
+
+    .price-label {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .price-value {
+      font-size: 36px;
+      font-weight: 700;
+    }
+
+    .price-up { color: #4ade80; }
+    .price-down { color: #e94560; }
+
+    .price-change {
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .weighted-avg {
+      text-align: center;
+      padding: 16px 24px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+    }
+
+    .weighted-avg-label {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .weighted-avg-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .weighted-avg-value.call { color: #4ade80; }
+    .weighted-avg-value.put { color: #e94560; }
+    .weighted-avg-value.all { color: #60a5fa; }
+
+    .prediction-box {
+      text-align: center;
+      padding: 16px 24px;
+      background: rgba(59,130,246,0.1);
+      border: 1px solid rgba(59,130,246,0.3);
+      border-radius: 12px;
+      min-width: 180px;
+    }
+
+    .prediction-label {
+      font-size: 11px;
+      color: #60a5fa;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .prediction-value {
+      font-size: 24px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .prediction-range {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    /* OI Stats Grid */
+    .oi-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    .oi-stat-card {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .oi-stat-label {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+
+    .oi-stat-value {
+      font-size: 22px;
+      font-weight: 700;
+    }
+
+    .oi-stat-value.call { color: #4ade80; }
+    .oi-stat-value.put { color: #e94560; }
+    .oi-stat-value.ratio { color: #f59e0b; }
+
+    .oi-stat-change {
+      font-size: 11px;
+      margin-top: 4px;
+    }
+
+    /* Charts Section */
+    .charts-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .chart-card {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .chart-card.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .chart-title {
+      font-size: 14px;
+      color: #999;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chart-legend {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    .legend-dot.call { background: #3b82f6; }
+    .legend-dot.put { background: #f97316; }
+
+    .chart-container {
+      height: 280px;
+      position: relative;
+    }
+
+    /* OI Distribution Chart */
+    #oiDistChart {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Options Chain Table */
+    .chain-section {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .chain-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .chain-title {
+      font-size: 14px;
+      color: #999;
+    }
+
+    .chain-filters {
+      display: flex;
+      gap: 8px;
+    }
+
+    .filter-btn {
+      padding: 4px 12px;
+      background: rgba(255,255,255,0.05);
+      border: none;
+      color: #666;
+      font-size: 11px;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      background: rgba(59,130,246,0.2);
+      color: #60a5fa;
+    }
+
+    .chain-table-wrapper {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .chain-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .chain-table th {
+      position: sticky;
+      top: 0;
+      background: #1a1a2e;
+      padding: 8px;
+      text-align: right;
+      color: #666;
+      font-weight: 500;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .chain-table th.strike {
+      text-align: center;
+      background: rgba(255,255,255,0.05);
+    }
+
+    .chain-table th.call { color: #4ade80; }
+    .chain-table th.put { color: #e94560; }
+
+    .chain-table td {
+      padding: 6px 8px;
+      text-align: right;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+
+    .chain-table td.strike {
+      text-align: center;
+      font-weight: 600;
+      background: rgba(255,255,255,0.02);
+    }
+
+    .chain-table td.call-oi { color: #4ade80; }
+    .chain-table td.put-oi { color: #e94560; }
+
+    .chain-table tr.atm {
+      background: rgba(59,130,246,0.1);
+    }
+
+    .chain-table tr.atm td.strike {
+      color: #60a5fa;
+      font-weight: 700;
+    }
+
+    .chain-table tr:hover {
+      background: rgba(255,255,255,0.03);
+    }
+
+    /* Max Pain Section */
+    .max-pain-section {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .max-pain-card {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,0.05);
+      text-align: center;
+    }
+
+    .max-pain-label {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .max-pain-value {
+      font-size: 32px;
+      font-weight: 700;
+      color: #f59e0b;
+    }
+
+    .max-pain-diff {
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .max-pain-diff.above { color: #4ade80; }
+    .max-pain-diff.below { color: #e94560; }
+
+    /* Greeks Section */
+    .greeks-section {
+      background: #1a1a2e;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .greeks-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: 12px;
+    }
+
+    .greek-item {
+      text-align: center;
+      padding: 12px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 8px;
+    }
+
+    .greek-name {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .greek-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #60a5fa;
+    }
+
+    /* Loading State */
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 200px;
+      color: #666;
+    }
+
+    .loading-spinner {
+      width: 30px;
+      height: 30px;
+      border: 3px solid rgba(255,255,255,0.1);
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-right: 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error State */
+    .error-message {
+      padding: 20px;
+      text-align: center;
+      color: #e94560;
+      background: rgba(233,69,96,0.1);
+      border-radius: 8px;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .summary-section {
+        grid-template-columns: 1fr 1fr;
+      }
+      .charts-section {
+        grid-template-columns: 1fr;
+      }
+      .oi-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .summary-section {
+        grid-template-columns: 1fr;
+      }
+      .max-pain-section {
+        grid-template-columns: 1fr;
+      }
+      .greeks-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
+
+    /* Signal Box */
+    .signal-box {
+      padding: 16px 24px;
+      border-radius: 12px;
+      text-align: center;
+      min-width: 160px;
+    }
+
+    .signal-box.bullish {
+      background: rgba(74,222,128,0.15);
+      border: 1px solid rgba(74,222,128,0.3);
+    }
+
+    .signal-box.bearish {
+      background: rgba(233,69,96,0.15);
+      border: 1px solid rgba(233,69,96,0.3);
+    }
+
+    .signal-box.neutral {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .signal-label {
+      font-size: 11px;
+      color: #666;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+    }
+
+    .signal-value {
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .signal-value.bullish { color: #4ade80; }
+    .signal-value.bearish { color: #e94560; }
+    .signal-value.neutral { color: #999; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>SPY Options Analysis</h1>
+    <div class="header-controls">
+      <a href="index.html" class="nav-link">Signal Dashboard</a>
+      <div class="expiry-toggle">
+        <button class="expiry-btn active" data-expiry="0dte">0DTE</button>
+        <button class="expiry-btn" data-expiry="1dte">1DTE</button>
+        <button class="expiry-btn" data-expiry="weekly">Weekly</button>
+      </div>
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Loading...</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- Summary Section -->
+    <section class="summary-section">
+      <div class="summary-price">
+        <div class="price-label">SPY Spot Price</div>
+        <div class="price-value price-up" id="spotPrice">---.--</div>
+        <div class="price-change">
+          <span id="priceChange">+0.00</span>
+          <span id="priceChangePercent">(+0.00%)</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 16px; justify-content: center;">
+        <div class="weighted-avg">
+          <div class="weighted-avg-label">Call OI Weighted Avg</div>
+          <div class="weighted-avg-value call" id="callWeightedAvg">---.--</div>
+        </div>
+        <div class="weighted-avg">
+          <div class="weighted-avg-label">Put OI Weighted Avg</div>
+          <div class="weighted-avg-value put" id="putWeightedAvg">---.--</div>
+        </div>
+        <div class="weighted-avg">
+          <div class="weighted-avg-label">All OI Weighted Avg</div>
+          <div class="weighted-avg-value all" id="allWeightedAvg">---.--</div>
+        </div>
+      </div>
+
+      <div class="prediction-box">
+        <div class="prediction-label">Expected Close</div>
+        <div class="prediction-value" id="expectedClose">---.--</div>
+        <div class="prediction-range" id="expectedRange">Range: -- to --</div>
+      </div>
+
+      <div class="signal-box neutral" id="signalBox">
+        <div class="signal-label">OI Signal</div>
+        <div class="signal-value neutral" id="signalValue">NEUTRAL</div>
+      </div>
+    </section>
+
+    <!-- OI Stats Grid -->
+    <section class="oi-stats-grid">
+      <div class="oi-stat-card">
+        <div class="oi-stat-label">Total Call OI</div>
+        <div class="oi-stat-value call" id="totalCallOI">--</div>
+        <div class="oi-stat-change" id="callOIChange">--</div>
+      </div>
+      <div class="oi-stat-card">
+        <div class="oi-stat-label">Total Put OI</div>
+        <div class="oi-stat-value put" id="totalPutOI">--</div>
+        <div class="oi-stat-change" id="putOIChange">--</div>
+      </div>
+      <div class="oi-stat-card">
+        <div class="oi-stat-label">Put/Call Ratio</div>
+        <div class="oi-stat-value ratio" id="pcRatio">--</div>
+        <div class="oi-stat-change" id="pcRatioChange">--</div>
+      </div>
+      <div class="oi-stat-card">
+        <div class="oi-stat-label">IV Rank</div>
+        <div class="oi-stat-value" id="ivRank" style="color: #a78bfa;">--%</div>
+        <div class="oi-stat-change" id="ivChange">--</div>
+      </div>
+    </section>
+
+    <!-- Max Pain Section -->
+    <section class="max-pain-section">
+      <div class="max-pain-card">
+        <div class="max-pain-label">Max Pain</div>
+        <div class="max-pain-value" id="maxPain">---.--</div>
+        <div class="max-pain-diff" id="maxPainDiff">-- from spot</div>
+      </div>
+      <div class="max-pain-card">
+        <div class="max-pain-label">Put Wall</div>
+        <div class="max-pain-value" style="color: #e94560;" id="putWall">---.--</div>
+        <div class="max-pain-diff" id="putWallOI">OI: --</div>
+      </div>
+      <div class="max-pain-card">
+        <div class="max-pain-label">Call Wall</div>
+        <div class="max-pain-value" style="color: #4ade80;" id="callWall">---.--</div>
+        <div class="max-pain-diff" id="callWallOI">OI: --</div>
+      </div>
+    </section>
+
+    <!-- Charts Section -->
+    <section class="charts-section">
+      <div class="chart-card full-width">
+        <div class="chart-title">
+          <span>Open Interest Distribution by Strike</span>
+          <div class="chart-legend">
+            <div class="legend-item">
+              <div class="legend-dot call"></div>
+              <span>Calls</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-dot put"></div>
+              <span>Puts</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-container" id="oiDistChart">
+          <div class="loading">
+            <div class="loading-spinner"></div>
+            Loading options data...
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Options Chain Table -->
+    <section class="chain-section">
+      <div class="chain-header">
+        <span class="chain-title">Options Chain</span>
+        <div class="chain-filters">
+          <button class="filter-btn active" data-range="all">All Strikes</button>
+          <button class="filter-btn" data-range="itm">ITM Only</button>
+          <button class="filter-btn" data-range="atm">Near ATM</button>
+          <button class="filter-btn" data-range="otm">OTM Only</button>
+        </div>
+      </div>
+      <div class="chain-table-wrapper">
+        <table class="chain-table" id="chainTable">
+          <thead>
+            <tr>
+              <th class="call">Call OI</th>
+              <th class="call">Call Vol</th>
+              <th class="call">Call IV</th>
+              <th class="call">Call Bid</th>
+              <th class="call">Call Ask</th>
+              <th class="strike">Strike</th>
+              <th class="put">Put Bid</th>
+              <th class="put">Put Ask</th>
+              <th class="put">Put IV</th>
+              <th class="put">Put Vol</th>
+              <th class="put">Put OI</th>
+            </tr>
+          </thead>
+          <tbody id="chainBody">
+            <tr>
+              <td colspan="11" style="text-align: center; padding: 40px; color: #666;">
+                Loading options chain...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Aggregate Greeks -->
+    <section class="greeks-section">
+      <div class="chart-title">Aggregate Greeks (Near ATM)</div>
+      <div class="greeks-grid">
+        <div class="greek-item">
+          <div class="greek-name">Net Delta</div>
+          <div class="greek-value" id="netDelta">--</div>
+        </div>
+        <div class="greek-item">
+          <div class="greek-name">Net Gamma</div>
+          <div class="greek-value" id="netGamma">--</div>
+        </div>
+        <div class="greek-item">
+          <div class="greek-name">Total Theta</div>
+          <div class="greek-value" id="totalTheta">--</div>
+        </div>
+        <div class="greek-item">
+          <div class="greek-name">Total Vega</div>
+          <div class="greek-value" id="totalVega">--</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="spy-options.js"></script>
+</body>
+</html>
