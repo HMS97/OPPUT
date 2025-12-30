@@ -17,17 +17,17 @@ class SPYOptionsAnalyzer {
     this.refreshTimer = null;
     this.oiChart = null;
 
-    // CORS proxies for client-side fetching (ordered by reliability)
+    // Cloudflare Worker URL (set this after deploying your worker)
+    // Deploy worker.js from cloudflare-worker/ folder, then set URL here
+    this.workerUrl = null; // e.g., 'https://your-worker.username.workers.dev'
+
+    // CORS proxies for client-side fetching (fallback if no worker)
     this.corsProxies = [
-      // Most reliable first
       (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
       (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
       (u) => `https://proxy.cors.sh/${u}`,
-      (u) => `https://cors-anywhere.herokuapp.com/${u}`,
       (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-      (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
-      (u) => `https://crossorigin.me/${u}`,
-      (u) => `https://yacdn.org/proxy/${u}`
+      (u) => `https://thingproxy.freeboard.io/fetch/${u}`
     ];
 
     this.init();
@@ -166,7 +166,26 @@ class SPYOptionsAnalyzer {
   async fetchSpotPrice() {
     console.log('[SPY Options] Fetching spot price...');
 
-    // Try backend API first
+    // Try Cloudflare Worker first (if configured)
+    if (this.workerUrl) {
+      try {
+        const response = await fetch(`${this.workerUrl}/quote/${this.symbol}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            this.spotPrice = data.price;
+            this.prevClose = data.previousClose;
+            this.updatePriceDisplay();
+            console.log('[SPY Options] Spot price from Cloudflare Worker:', this.spotPrice);
+            return;
+          }
+        }
+      } catch (e) {
+        console.log('[SPY Options] Cloudflare Worker failed:', e.message);
+      }
+    }
+
+    // Try backend API
     const backendData = await this.fetchWithProxy(`/api/quote/${this.symbol}`);
     if (backendData?.success) {
       this.spotPrice = backendData.price;
@@ -199,7 +218,24 @@ class SPYOptionsAnalyzer {
   async fetchExpiries() {
     console.log('[SPY Options] Fetching expiries...');
 
-    // Try backend API first
+    // Try Cloudflare Worker first (if configured)
+    if (this.workerUrl) {
+      try {
+        const response = await fetch(`${this.workerUrl}/options/${this.symbol}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.expirationDates) {
+            this.availableExpiries = data.expirationDates;
+            console.log(`[SPY Options] Expiries from Cloudflare Worker: ${this.availableExpiries.length}`);
+            return;
+          }
+        }
+      } catch (e) {
+        console.log('[SPY Options] Cloudflare Worker failed:', e.message);
+      }
+    }
+
+    // Try backend API
     const backendData = await this.fetchWithProxy(`/api/options/${this.symbol}`);
     if (backendData?.success && backendData.expirationDates) {
       this.availableExpiries = backendData.expirationDates;
@@ -269,7 +305,24 @@ class SPYOptionsAnalyzer {
 
     console.log('[SPY Options] Fetching options chain...');
 
-    // Try backend API first
+    // Try Cloudflare Worker first (if configured)
+    if (this.workerUrl) {
+      try {
+        const response = await fetch(`${this.workerUrl}/options/${this.symbol}/${this.selectedExpiry}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.options) {
+            this.optionsData = { options: data.options };
+            console.log(`[SPY Options] Chain from Cloudflare Worker: ${this.optionsData.options[0]?.calls?.length || 0} calls, ${this.optionsData.options[0]?.puts?.length || 0} puts`);
+            return;
+          }
+        }
+      } catch (e) {
+        console.log('[SPY Options] Cloudflare Worker failed:', e.message);
+      }
+    }
+
+    // Try backend API
     const backendData = await this.fetchWithProxy(`/api/options/${this.symbol}/${this.selectedExpiry}`);
     if (backendData?.success && backendData.options) {
       this.optionsData = { options: backendData.options };
