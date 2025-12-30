@@ -683,13 +683,60 @@ class SPYDashboard {
   }
 
   async fetchRealSPYData(timeframe) {
+    // Try TradingView backend API first (if server is running)
+    try {
+      const candles = await this.fetchFromTradingViewAPI(timeframe);
+      if (candles && candles.length >= 10) {
+        console.log(`[SPY Dashboard] Using TradingView API data`);
+        return candles;
+      }
+    } catch (e) {
+      console.log(`[SPY Dashboard] TradingView API not available: ${e.message}`);
+    }
+
+    // Fallback to Yahoo Finance
+    return this.fetchFromYahooFinance(timeframe);
+  }
+
+  async fetchFromTradingViewAPI(timeframe) {
+    // Determine API base URL (same host as the page, or localhost:3000 for dev)
+    const baseUrl = window.location.port === ''
+      ? `${window.location.origin}`
+      : 'http://localhost:3000';
+
+    let url = `${baseUrl}/api/spy/${timeframe}`;
+
+    // Add replay timestamp if in replay mode
+    if (this.replayDatetime) {
+      url += `?replay=${this.replayDatetime.getTime()}`;
+    }
+
+    const response = await fetch(url, {
+      headers: { 'Accept': 'application/json' },
+      timeout: 10000
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.success || !data.candles) {
+      throw new Error(data.error || 'Invalid response');
+    }
+
+    console.log(`[SPY Dashboard] TradingView: ${data.candles.length} candles for ${timeframe}m`);
+    return data.candles;
+  }
+
+  async fetchFromYahooFinance(timeframe) {
     // Map timeframe to Yahoo Finance parameters
-    // Lookback in days - need enough candles for pattern detection (~100+ candles)
     const tfConfig = {
-      5: { interval: '5m', range: '5d', lookback: 5 },      // 5 days = ~390 candles
-      15: { interval: '15m', range: '1mo', lookback: 15 },  // 15 days = ~390 candles
-      60: { interval: '60m', range: '3mo', lookback: 60 },  // 60 days = ~480 candles
-      240: { interval: '1d', range: '1y', lookback: 180 }   // 180 days = ~180 candles
+      5: { interval: '5m', range: '5d', lookback: 5 },
+      15: { interval: '15m', range: '1mo', lookback: 15 },
+      60: { interval: '60m', range: '3mo', lookback: 60 },
+      240: { interval: '1d', range: '1y', lookback: 180 }
     };
 
     const config = tfConfig[timeframe] || tfConfig[5];
@@ -702,9 +749,8 @@ class SPYDashboard {
       const endTime = Math.floor(this.replayDatetime.getTime() / 1000);
       const startTime = endTime - (config.lookback * 24 * 60 * 60);
       url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&period1=${startTime}&period2=${endTime}`;
-      console.log(`[SPY Dashboard] Replay fetch: ${new Date(startTime * 1000).toISOString()} to ${new Date(endTime * 1000).toISOString()}`);
+      console.log(`[SPY Dashboard] Yahoo replay: ${new Date(startTime * 1000).toISOString()} to ${new Date(endTime * 1000).toISOString()}`);
     } else {
-      // Real-time: use range parameter
       url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${config.interval}&range=${config.range}`;
     }
 
