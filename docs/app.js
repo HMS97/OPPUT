@@ -282,6 +282,7 @@ class SPYDashboard {
     this.dataCache = {}; // Clear cache
 
     document.getElementById('statusText').textContent = `Replay: ${this.replayDatetime.toLocaleString()}`;
+    document.getElementById('statusText').style.color = '#60a5fa'; // Blue for replay mode
     console.log(`[SPY Dashboard] Replay datetime: ${this.replayDatetime.toISOString()}, Unix: ${Math.floor(this.replayDatetime.getTime() / 1000)}`);
 
     // Run single scan for the selected datetime
@@ -671,6 +672,9 @@ class SPYDashboard {
   }
 
   updateDataSourceStatus(isReal) {
+    // Don't update status in replay mode
+    if (this.dataMode === 'replay') return;
+
     const statusText = document.getElementById('statusText');
     if (statusText) {
       statusText.textContent = isReal ? 'Live Data' : 'Demo Data';
