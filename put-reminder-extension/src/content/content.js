@@ -430,56 +430,163 @@ class PutPatternMonitor {
   }
 
   generateSimulatedData(timeframe) {
-    // Generate realistic test candle data for demonstration
+    // Generate realistic test candle data with varied market scenarios
     // In production, this would be replaced with actual chart data
 
     const candles = [];
     let price = 87000; // Starting price (BTC-like)
     const now = Date.now();
     const intervalMs = timeframe * 60 * 1000;
+    const volatility = 0.002 * Math.sqrt(timeframe / 5);
 
-    // Generate 100 candles
-    for (let i = 0; i < 100; i++) {
-      // Volatility scales with timeframe
-      const volatility = 0.002 * Math.sqrt(timeframe / 5);
-      const trend = Math.random() > 0.5 ? 1 : -1;
+    // Randomly choose a market scenario
+    const scenarios = ['bullish', 'bearish', 'sideways', 'rejection', 'breakout', 'neutral'];
+    const scenario = scenarios[Math.floor(Math.random() * scenarios.length)];
 
-      const open = price;
-      const change = price * volatility * (Math.random() - 0.5 + trend * 0.1);
-      const close = open + change;
-      const high = Math.max(open, close) + Math.abs(change) * Math.random();
-      const low = Math.min(open, close) - Math.abs(change) * Math.random();
+    console.log(`[PUT Pattern Monitor] Generating ${scenario} scenario for ${timeframe}m`);
 
-      candles.push({
-        time: now - (100 - i) * intervalMs,
-        open,
-        high,
-        low,
-        close,
-        volume: Math.random() * 1000 * (timeframe / 5)
-      });
+    switch (scenario) {
+      case 'bullish':
+        // Bullish trend - should NOT trigger PUT signals
+        for (let i = 0; i < 100; i++) {
+          const open = price;
+          const trend = 0.3 + Math.random() * 0.2;
+          const change = price * volatility * (Math.random() - 0.3 + trend);
+          const close = open + change;
 
-      price = close;
-    }
+          candles.push({
+            time: now - (100 - i) * intervalMs,
+            open,
+            high: Math.max(open, close) + Math.abs(change) * Math.random() * 0.3,
+            low: Math.min(open, close) - Math.abs(change) * Math.random() * 0.8,
+            close,
+            volume: Math.random() * 1000 * (timeframe / 5)
+          });
+          price = close;
+        }
+        break;
 
-    // Add some pattern-forming candles at the end for testing
-    const lastPrice = candles[candles.length - 1].close;
-    const resistance = lastPrice * 1.005;
+      case 'bearish':
+      case 'rejection':
+        // Bearish/Rejection pattern - SHOULD trigger PUT signals
+        // First build up
+        for (let i = 0; i < 60; i++) {
+          const open = price;
+          const trend = 0.2 + Math.random() * 0.3;
+          const change = price * volatility * (Math.random() - 0.3 + trend);
+          const close = open + change;
 
-    for (let i = 0; i < 5; i++) {
-      const open = candles[candles.length - 1].close;
-      const high = resistance + Math.random() * 50;
-      const close = resistance - Math.random() * 100;
-      const low = close - Math.random() * 30;
+          candles.push({
+            time: now - (100 - i) * intervalMs,
+            open,
+            high: Math.max(open, close) + Math.abs(change) * Math.random() * 0.4,
+            low: Math.min(open, close) - Math.abs(change) * Math.random() * 0.2,
+            close,
+            volume: Math.random() * 1000 * (timeframe / 5)
+          });
+          price = close;
+        }
 
-      candles.push({
-        time: now + i * intervalMs,
-        open,
-        high,
-        low,
-        close,
-        volume: Math.random() * 1000
-      });
+        // Then rejection at top
+        const resistance = price * 1.003;
+        for (let i = 60; i < 100; i++) {
+          const open = price;
+          const high = resistance + (Math.random() - 0.5) * price * 0.002;
+          const close = resistance - Math.random() * price * 0.003;
+          const low = close - Math.random() * price * 0.001;
+
+          candles.push({
+            time: now - (100 - i) * intervalMs,
+            open,
+            high,
+            low,
+            close,
+            volume: Math.random() * 1000 * (timeframe / 5) * 1.5
+          });
+          price = close;
+        }
+        break;
+
+      case 'sideways':
+        // Sideways consolidation - weak or no signals
+        const rangeMid = price;
+        const rangeSize = price * 0.01;
+
+        for (let i = 0; i < 100; i++) {
+          const open = price;
+          const distFromMid = (price - rangeMid) / rangeSize;
+          const meanReversion = -distFromMid * 0.3;
+          const change = price * volatility * (Math.random() - 0.5 + meanReversion);
+          const close = open + change;
+
+          candles.push({
+            time: now - (100 - i) * intervalMs,
+            open,
+            high: Math.max(open, close) + Math.abs(change) * Math.random() * 0.5,
+            low: Math.min(open, close) - Math.abs(change) * Math.random() * 0.5,
+            close,
+            volume: Math.random() * 1000 * (timeframe / 5) * 0.7
+          });
+          price = close;
+        }
+        break;
+
+      case 'breakout':
+        // Bullish breakout - should NOT trigger PUT signals
+        const breakoutResistance = price * 1.005;
+
+        for (let i = 0; i < 70; i++) {
+          const open = price;
+          const change = price * volatility * (Math.random() - 0.5);
+          const close = Math.min(open + change, breakoutResistance * 0.998);
+
+          candles.push({
+            time: now - (100 - i) * intervalMs,
+            open,
+            high: Math.min(Math.max(open, close) + Math.abs(change) * 0.5, breakoutResistance),
+            low: Math.min(open, close) - Math.abs(change) * Math.random() * 0.3,
+            close,
+            volume: Math.random() * 1000 * (timeframe / 5)
+          });
+          price = close;
+        }
+
+        for (let i = 70; i < 100; i++) {
+          const open = price;
+          const change = price * volatility * (0.5 + Math.random() * 0.5);
+          const close = open + change;
+
+          candles.push({
+            time: now - (100 - i) * intervalMs,
+            open,
+            high: close + Math.abs(change) * Math.random() * 0.2,
+            low: open - Math.abs(change) * Math.random() * 0.4,
+            close,
+            volume: Math.random() * 1000 * (timeframe / 5) * 2
+          });
+          price = close;
+        }
+        break;
+
+      default:
+        // Neutral/random data
+        for (let i = 0; i < 100; i++) {
+          const trend = Math.random() > 0.5 ? 1 : -1;
+          const open = price;
+          const change = price * volatility * (Math.random() - 0.5 + trend * 0.05);
+          const close = open + change;
+
+          candles.push({
+            time: now - (100 - i) * intervalMs,
+            open,
+            high: Math.max(open, close) + Math.abs(change) * Math.random(),
+            low: Math.min(open, close) - Math.abs(change) * Math.random(),
+            close,
+            volume: Math.random() * 1000 * (timeframe / 5)
+          });
+          price = close;
+        }
+        break;
     }
 
     return candles;

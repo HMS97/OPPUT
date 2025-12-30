@@ -451,6 +451,168 @@
       background: rgba(255,255,255,0.2);
       border-radius: 3px;
     }
+
+    /* Replay Controls */
+    .replay-controls {
+      display: none;
+      padding: 12px 16px;
+      background: #1a1a2e;
+      border-radius: 12px;
+      margin-top: 8px;
+    }
+
+    .replay-controls.active {
+      display: block;
+    }
+
+    .replay-nav {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .replay-btn {
+      padding: 8px 16px;
+      background: rgba(233,69,96,0.2);
+      border: 1px solid #e94560;
+      border-radius: 8px;
+      color: #e94560;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .replay-btn:hover {
+      background: rgba(233,69,96,0.4);
+    }
+
+    .replay-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #replayInfo {
+      text-align: center;
+    }
+
+    .replay-scenario {
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+    }
+
+    .scenario-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .scenario-number {
+      padding: 4px 8px;
+      background: rgba(233,69,96,0.2);
+      border-radius: 4px;
+      font-size: 12px;
+      color: #e94560;
+    }
+
+    .scenario-name {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .scenario-expected {
+      font-size: 12px;
+      color: #999;
+    }
+
+    /* Backtest Card */
+    .backtest-card {
+      margin-top: 16px;
+    }
+
+    .backtest-btn {
+      width: 100%;
+      padding: 12px;
+      background: linear-gradient(90deg, #3b82f6, #6366f1);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .backtest-btn:hover {
+      opacity: 0.9;
+      transform: translateY(-1px);
+    }
+
+    .backtest-progress {
+      height: 8px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .backtest-progress .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, #3b82f6, #6366f1);
+      transition: width 0.2s;
+    }
+
+    .backtest-summary {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .summary-stat {
+      text-align: center;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+    }
+
+    .stat-value {
+      display: block;
+      font-size: 24px;
+      font-weight: 700;
+      color: #4ade80;
+    }
+
+    .stat-label {
+      display: block;
+      font-size: 11px;
+      color: #999;
+      margin-top: 4px;
+    }
+
+    .backtest-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+
+    .backtest-table th,
+    .backtest-table td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .backtest-table th {
+      color: #999;
+      font-weight: 500;
+    }
+
+    .backtest-table td:first-child {
+      text-transform: capitalize;
+    }
   </style>
 </head>
 <body>
@@ -477,6 +639,18 @@
       <div class="chart-container" id="chartContainer">
         <!-- TradingView Widget -->
         <div id="tradingview_chart" style="height: 100%;"></div>
+      </div>
+
+      <!-- Replay Controls (shown when in replay mode) -->
+      <div class="replay-controls" id="replayControls">
+        <div class="replay-nav">
+          <button class="replay-btn" onclick="window.replayController.prev()">◀ Prev</button>
+          <button class="replay-btn" id="replayPlayBtn" onclick="window.replayController.play()">▶ Play</button>
+          <button class="replay-btn" onclick="window.replayController.next()">Next ▶</button>
+        </div>
+        <div id="replayInfo">
+          <p style="color: #999;">Click a navigation button to load a scenario</p>
+        </div>
       </div>
     </section>
 
@@ -555,6 +729,19 @@
             <option value="10" selected>10 sec</option>
             <option value="30">30 sec</option>
           </select>
+        </div>
+      </div>
+
+      <!-- Backtesting -->
+      <div class="card backtest-card">
+        <div class="card-title">Backtest Signal Accuracy</div>
+        <div id="backtestResults">
+          <p style="color: #666; text-align: center; padding: 10px; font-size: 13px;">
+            Test how well the PUT signal detection works across different market scenarios.
+          </p>
+          <button class="backtest-btn" onclick="window.backtester.runBacktest(10)">
+            Run Backtest (60 scenarios)
+          </button>
         </div>
       </div>
     </aside>
