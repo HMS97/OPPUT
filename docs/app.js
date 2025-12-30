@@ -10,6 +10,7 @@ const TF_CONFIG = {
 };
 
 const PATTERN_ICONS = {
+  // Price action patterns
   'LOWER_HIGH': '📉',
   'HIGHER_LOW': '📈',
   'REJECTION_AT_RESISTANCE': '🛑',
@@ -21,7 +22,26 @@ const PATTERN_ICONS = {
   'DOUBLE_REJECTION': '⚡',
   'DOUBLE_REJECTION_BOTTOM': '⚡',
   'PRICE_STALLING': '⏸️',
-  'PRICE_STALLING_LOW': '⏸️'
+  'PRICE_STALLING_LOW': '⏸️',
+  // V2 Indicator patterns
+  'RSI_OVERBOUGHT': '🔺',
+  'RSI_OVERSOLD': '🔻',
+  'RSI_BEARISH_DIVERGENCE': '↘️',
+  'RSI_BULLISH_DIVERGENCE': '↗️',
+  'BB_UPPER_TOUCH': '📊',
+  'BB_LOWER_TOUCH': '📊',
+  'BB_SQUEEZE_BULLISH': '🎯',
+  'BB_SQUEEZE_BEARISH': '🎯',
+  'EMA_BULLISH_CROSS': '✖️',
+  'EMA_BEARISH_CROSS': '✖️',
+  'EMA_OVEREXTENDED_UP': '⬆️',
+  'EMA_OVEREXTENDED_DOWN': '⬇️',
+  'MACD_BULLISH_CROSS': '〽️',
+  'MACD_BEARISH_CROSS': '〽️',
+  'MACD_HIST_BULLISH': '📶',
+  'MACD_HIST_BEARISH': '📶',
+  'VOLUME_SPIKE_BULLISH': '📢',
+  'VOLUME_SPIKE_BEARISH': '📢'
 };
 
 class SPYDashboard {
