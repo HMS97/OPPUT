@@ -1,0 +1,178 @@
+/**
+ * Styles for PUT Pattern Reminder floating indicator
+ */
+
+#put-pattern-indicator {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  width: 200px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #eee;
+  z-index: 999999;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+#put-pattern-indicator.ppr-minimized {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+}
+
+#put-pattern-indicator.ppr-minimized .ppr-signal,
+#put-pattern-indicator.ppr-minimized .ppr-patterns,
+#put-pattern-indicator.ppr-minimized .ppr-actions,
+#put-pattern-indicator.ppr-minimized .ppr-title {
+  display: none;
+}
+
+#put-pattern-indicator.ppr-minimized .ppr-header {
+  justify-content: center;
+  padding: 12px;
+}
+
+#put-pattern-indicator.ppr-minimized .ppr-status {
+  font-size: 20px;
+}
+
+.ppr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: linear-gradient(90deg, #e94560, #ff6b6b);
+  cursor: grab;
+  user-select: none;
+}
+
+.ppr-header:active {
+  cursor: grabbing;
+}
+
+.ppr-title {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ppr-status {
+  font-size: 12px;
+  color: #4ade80;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.ppr-signal {
+  padding: 12px;
+  text-align: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ppr-signal-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #999;
+}
+
+.ppr-patterns {
+  padding: 8px 12px;
+  max-height: 100px;
+  overflow-y: auto;
+}
+
+.ppr-pattern-item {
+  font-size: 11px;
+  padding: 4px 8px;
+  background: rgba(233, 69, 96, 0.2);
+  border-radius: 4px;
+  margin-bottom: 4px;
+  color: #e94560;
+}
+
+.ppr-actions {
+  display: flex;
+  padding: 8px;
+  gap: 8px;
+}
+
+.ppr-btn {
+  flex: 1;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ppr-scan {
+  background: linear-gradient(90deg, #e94560, #ff6b6b);
+  color: white;
+}
+
+.ppr-scan:hover {
+  opacity: 0.9;
+}
+
+.ppr-close {
+  width: 32px;
+  flex: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.ppr-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Alert states */
+#put-pattern-indicator.ppr-alert {
+  border-color: #e94560;
+  box-shadow: 0 0 20px rgba(233, 69, 96, 0.5);
+}
+
+#put-pattern-indicator.ppr-flash {
+  animation: flash 0.5s ease-in-out 3;
+}
+
+@keyframes flash {
+  0%, 100% {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(233, 69, 96, 0.8);
+  }
+}
+
+/* Scrollbar */
+.ppr-patterns::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ppr-patterns::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ppr-patterns::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  #put-pattern-indicator {
+    top: auto;
+    bottom: 20px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+  }
+}

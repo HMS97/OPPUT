@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PUT Pattern Reminder</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 360px;
+      min-height: 400px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: #eee;
+    }
+
+    .header {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      padding: 16px;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 12px;
+      opacity: 0.9;
+    }
+
+    .status-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #4ade80;
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.inactive {
+      background: #666;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 24px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #333;
+      border-radius: 24px;
+      transition: 0.3s;
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .toggle-slider {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(24px);
+    }
+
+    .signal-panel {
+      padding: 16px;
+    }
+
+    .signal-card {
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .signal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .signal-title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .signal-strength {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .signal-strength.strong {
+      background: #e94560;
+      color: white;
+    }
+
+    .signal-strength.medium {
+      background: #f59e0b;
+      color: white;
+    }
+
+    .signal-strength.weak {
+      background: #4ade80;
+      color: #1a1a2e;
+    }
+
+    .signal-strength.none {
+      background: #666;
+      color: white;
+    }
+
+    .signal-meter {
+      height: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .signal-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4ade80, #f59e0b, #e94560);
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .patterns-list {
+      max-height: 150px;
+      overflow-y: auto;
+    }
+
+    .pattern-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .pattern-icon {
+      width: 24px;
+      height: 24px;
+      background: #e94560;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+
+    .pattern-info {
+      flex: 1;
+    }
+
+    .pattern-name {
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+
+    .pattern-desc {
+      color: #999;
+      font-size: 11px;
+    }
+
+    .settings-panel {
+      padding: 16px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .settings-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .setting-label {
+      font-size: 13px;
+    }
+
+    .setting-select {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .setting-select option {
+      background: #1a1a2e;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .btn:active {
+      transform: scale(0.98);
+    }
+
+    .btn-primary {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      color: white;
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      margin-top: 8px;
+    }
+
+    .no-signal {
+      text-align: center;
+      padding: 24px;
+      color: #666;
+    }
+
+    .no-signal-icon {
+      font-size: 48px;
+      margin-bottom: 12px;
+    }
+
+    .alert-history {
+      padding: 16px;
+    }
+
+    .alert-item {
+      background: rgba(233, 69, 96, 0.2);
+      border-left: 3px solid #e94560;
+      padding: 10px;
+      border-radius: 0 8px 8px 0;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .alert-time {
+      color: #999;
+      font-size: 10px;
+    }
+
+    footer {
+      text-align: center;
+      padding: 12px;
+      font-size: 11px;
+      color: #666;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>PUT Pattern Reminder</h1>
+    <p>Smart Short Position Alert System</p>
+  </div>
+
+  <div class="status-bar">
+    <div class="status-indicator">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Monitoring...</span>
+    </div>
+    <label class="toggle-switch">
+      <input type="checkbox" id="enableToggle" checked>
+      <span class="toggle-slider"></span>
+    </label>
+  </div>
+
+  <div class="signal-panel">
+    <div class="signal-card">
+      <div class="signal-header">
+        <span class="signal-title">Current Signal</span>
+        <span class="signal-strength none" id="signalBadge">No Signal</span>
+      </div>
+      <div class="signal-meter">
+        <div class="signal-meter-fill" id="signalMeter" style="width: 0%"></div>
+      </div>
+      <p id="recommendation" style="font-size: 13px; color: #999;">
+        Open TradingView or Binance to start monitoring...
+      </p>
+    </div>
+
+    <div id="patternsContainer">
+      <div class="no-signal">
+        <div class="no-signal-icon">📊</div>
+        <p>No patterns detected yet</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="settings-panel">
+    <div class="settings-title">Settings</div>
+
+    <div class="setting-row">
+      <span class="setting-label">Alert Sensitivity</span>
+      <select class="setting-select" id="sensitivity">
+        <option value="low">Low</option>
+        <option value="medium" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+    </div>
+
+    <div class="setting-row">
+      <span class="setting-label">Sound Alert</span>
+      <label class="toggle-switch" style="width: 40px; height: 20px;">
+        <input type="checkbox" id="soundToggle" checked>
+        <span class="toggle-slider" style="border-radius: 20px;"></span>
+      </label>
+    </div>
+
+    <div class="setting-row">
+      <span class="setting-label">Auto Refresh</span>
+      <select class="setting-select" id="refreshInterval">
+        <option value="5">5 seconds</option>
+        <option value="10" selected>10 seconds</option>
+        <option value="30">30 seconds</option>
+        <option value="60">1 minute</option>
+      </select>
+    </div>
+
+    <button class="btn btn-primary" id="scanNow">
+      Scan Now
+    </button>
+    <button class="btn btn-secondary" id="clearAlerts">
+      Clear Alert History
+    </button>
+  </div>
+
+  <div class="alert-history" id="alertHistory">
+    <div class="settings-title">Recent Alerts</div>
+    <div id="alertList">
+      <p style="color: #666; font-size: 12px; text-align: center;">No recent alerts</p>
+    </div>
+  </div>
+
+  <footer>
+    PUT Pattern Reminder v1.0 | Made for traders
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "PUT Pattern Reminder",
+  "version": "1.0.0",
+  "description": "Recognizes PUT/Short trading patterns and alerts you when to enter short positions",
+  "permissions": [
+    "storage",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://*.tradingview.com/*",
+    "https://*.binance.com/*"
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "src/background/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.tradingview.com/*",
+        "https://*.binance.com/*"
+      ],
+      "js": [
+        "src/lib/patterns.js",
+        "src/content/content.js"
+      ],
+      "css": [
+        "src/content/content.css"
+      ]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
