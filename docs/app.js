@@ -10,6 +10,7 @@ const TF_CONFIG = {
 };
 
 const PATTERN_ICONS = {
+  // Price action patterns
   'LOWER_HIGH': '📉',
   'HIGHER_LOW': '📈',
   'REJECTION_AT_RESISTANCE': '🛑',
@@ -21,7 +22,26 @@ const PATTERN_ICONS = {
   'DOUBLE_REJECTION': '⚡',
   'DOUBLE_REJECTION_BOTTOM': '⚡',
   'PRICE_STALLING': '⏸️',
-  'PRICE_STALLING_LOW': '⏸️'
+  'PRICE_STALLING_LOW': '⏸️',
+  // V2 Indicator patterns
+  'RSI_OVERBOUGHT': '🔺',
+  'RSI_OVERSOLD': '🔻',
+  'RSI_BEARISH_DIVERGENCE': '↘️',
+  'RSI_BULLISH_DIVERGENCE': '↗️',
+  'BB_UPPER_TOUCH': '📊',
+  'BB_LOWER_TOUCH': '📊',
+  'BB_SQUEEZE_BULLISH': '🎯',
+  'BB_SQUEEZE_BEARISH': '🎯',
+  'EMA_BULLISH_CROSS': '✖️',
+  'EMA_BEARISH_CROSS': '✖️',
+  'EMA_OVEREXTENDED_UP': '⬆️',
+  'EMA_OVEREXTENDED_DOWN': '⬇️',
+  'MACD_BULLISH_CROSS': '〽️',
+  'MACD_BEARISH_CROSS': '〽️',
+  'MACD_HIST_BULLISH': '📶',
+  'MACD_HIST_BEARISH': '📶',
+  'VOLUME_SPIKE_BULLISH': '📢',
+  'VOLUME_SPIKE_BEARISH': '📢'
 };
 
 class SPYDashboard {
@@ -46,6 +66,20 @@ class SPYDashboard {
     this.currentPrice = null; // Current/entry price for target calculation
     this.replayChart = null; // Lightweight chart for replay mode
     this.replayCandleSeries = null; // Candle series for replay chart
+
+    // Backtesting data
+    this.backtestTrades = [];
+    this.backtestStats = {
+      totalSignals: 0,
+      putSignals: 0,
+      callSignals: 0,
+      wins: 0,
+      losses: 0,
+      totalProfit: 0
+    };
+
+    // Last known indicator values for display
+    this.lastIndicators = null;
 
     this.init();
   }
@@ -143,26 +177,42 @@ class SPYDashboard {
       this.restartMonitoring();
     });
 
-    // Replay controls
-    document.getElementById('replayGoBtn').addEventListener('click', () => {
-      this.runReplay();
-    });
+    // Replay controls (with null checks)
+    const replayGoBtn = document.getElementById('replayGoBtn');
+    const replayDatetime = document.getElementById('replayDatetime');
 
-    document.getElementById('replayDatetime').addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') this.runReplay();
-    });
+    if (replayGoBtn) {
+      replayGoBtn.addEventListener('click', () => {
+        this.runReplay();
+      });
+    }
 
-    // Set default replay datetime to now
-    const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    document.getElementById('replayDatetime').value = now.toISOString().slice(0, 16);
+    if (replayDatetime) {
+      replayDatetime.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') this.runReplay();
+      });
+
+      // Set default replay datetime to now
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      replayDatetime.value = now.toISOString().slice(0, 16);
+    }
   }
 
   setDataMode(mode) {
     this.dataMode = mode;
-    document.getElementById('realtimeBtn').classList.toggle('active', mode === 'realtime');
-    document.getElementById('replayBtn').classList.toggle('active', mode === 'replay');
-    document.getElementById('statusText').textContent = mode === 'realtime' ? 'Live' : 'Replay';
+
+    // Update buttons
+    const realtimeBtn = document.getElementById('realtimeBtn');
+    const replayBtn = document.getElementById('replayBtn');
+    const statusText = document.getElementById('statusText');
+
+    if (realtimeBtn) realtimeBtn.classList.toggle('active', mode === 'realtime');
+    if (replayBtn) replayBtn.classList.toggle('active', mode === 'replay');
+    if (statusText) {
+      statusText.textContent = mode === 'realtime' ? 'Live' : 'Replay Mode';
+      statusText.style.color = mode === 'realtime' ? '#4ade80' : '#60a5fa';
+    }
 
     // Show/hide replay controls
     const replayControls = document.getElementById('replayControls');
@@ -187,21 +237,45 @@ class SPYDashboard {
     } else {
       // Stop auto-refresh in replay mode
       if (this.scanTimer) clearInterval(this.scanTimer);
-      // Initialize replay chart if needed
-      this.initReplayChart();
+
+      // Initialize replay chart after a short delay to ensure container is visible
+      setTimeout(() => {
+        this.initReplayChart();
+      }, 100);
+
+      console.log('[SPY Dashboard] Switched to Replay mode - select a date and click Go');
     }
   }
 
   initReplayChart() {
-    if (this.replayChart) return; // Already initialized
-
     const container = document.getElementById('replay_chart');
-    if (!container || typeof LightweightCharts === 'undefined') {
-      console.warn('[SPY Dashboard] Lightweight Charts not available');
+    if (!container) {
+      console.warn('[SPY Dashboard] Replay chart container not found');
       return;
     }
 
+    if (typeof LightweightCharts === 'undefined') {
+      console.warn('[SPY Dashboard] Lightweight Charts library not loaded');
+      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;"><p>Loading chart library...</p></div>';
+      return;
+    }
+
+    // Clean up existing chart if any
+    if (this.replayChart) {
+      this.replayChart.remove();
+      this.replayChart = null;
+      this.replayCandleSeries = null;
+    }
+
+    // Get container dimensions
+    const width = container.clientWidth || 800;
+    const height = 350;
+
+    console.log(`[SPY Dashboard] Creating replay chart: ${width}x${height}`);
+
     this.replayChart = LightweightCharts.createChart(container, {
+      width: width,
+      height: height,
       layout: {
         background: { type: 'solid', color: '#1a1a2e' },
         textColor: '#999'
@@ -233,39 +307,75 @@ class SPYDashboard {
     });
 
     // Handle resize
-    window.addEventListener('resize', () => {
+    const resizeHandler = () => {
       if (this.replayChart && this.dataMode === 'replay') {
-        this.replayChart.applyOptions({ width: container.clientWidth });
+        const newWidth = container.clientWidth || 800;
+        this.replayChart.applyOptions({ width: newWidth });
       }
-    });
+    };
+
+    // Remove old listener and add new one
+    window.removeEventListener('resize', this._replayResizeHandler);
+    this._replayResizeHandler = resizeHandler;
+    window.addEventListener('resize', resizeHandler);
+
+    console.log('[SPY Dashboard] Replay chart initialized');
   }
 
   updateReplayChart(candles) {
-    if (!this.replayCandleSeries || !candles || candles.length === 0) return;
+    if (!candles || candles.length === 0) {
+      console.warn('[SPY Dashboard] No candles to display in replay chart');
+      return;
+    }
+
+    // Initialize chart if not ready
+    if (!this.replayChart || !this.replayCandleSeries) {
+      console.log('[SPY Dashboard] Initializing replay chart for data display');
+      this.initReplayChart();
+      if (!this.replayCandleSeries) {
+        console.error('[SPY Dashboard] Failed to initialize replay chart');
+        return;
+      }
+    }
 
     // Convert candles to Lightweight Charts format
-    const chartData = candles.map(c => ({
-      time: Math.floor(c.time / 1000), // Convert ms to seconds
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close
-    }));
+    // Sort by time and filter invalid data
+    const chartData = candles
+      .filter(c => c.time && c.open && c.high && c.low && c.close)
+      .map(c => ({
+        time: Math.floor(c.time / 1000), // Convert ms to seconds
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close
+      }))
+      .sort((a, b) => a.time - b.time);
 
-    this.replayCandleSeries.setData(chartData);
-    this.replayChart.timeScale().fitContent();
+    if (chartData.length === 0) {
+      console.warn('[SPY Dashboard] No valid candle data after filtering');
+      return;
+    }
+
+    console.log(`[SPY Dashboard] Updating replay chart with ${chartData.length} candles`);
+
+    try {
+      this.replayCandleSeries.setData(chartData);
+      this.replayChart.timeScale().fitContent();
+    } catch (e) {
+      console.error('[SPY Dashboard] Error updating replay chart:', e);
+    }
   }
 
   async runReplay() {
-    const datetimeInput = document.getElementById('replayDatetime').value;
-    if (!datetimeInput) {
+    const datetimeInput = document.getElementById('replayDatetime');
+    if (!datetimeInput || !datetimeInput.value) {
       alert('Please select a date and time');
       return;
     }
 
     // Parse datetime-local input properly (it's in local time)
     // Format: "2024-01-15T14:30"
-    const [datePart, timePart] = datetimeInput.split('T');
+    const [datePart, timePart] = datetimeInput.value.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hours, minutes] = timePart.split(':').map(Number);
 
@@ -288,8 +398,16 @@ class SPYDashboard {
 
     this.dataCache = {}; // Clear cache
 
-    document.getElementById('statusText').textContent = `Replay: ${this.replayDatetime.toLocaleString()}`;
-    document.getElementById('statusText').style.color = '#60a5fa'; // Blue for replay mode
+    // Initialize replay chart if needed
+    this.initReplayChart();
+
+    // Update status
+    const statusText = document.getElementById('statusText');
+    if (statusText) {
+      statusText.textContent = `Replay: ${this.replayDatetime.toLocaleString()}`;
+      statusText.style.color = '#60a5fa'; // Blue for replay mode
+    }
+
     console.log(`[SPY Dashboard] Replay datetime: ${this.replayDatetime.toISOString()}, Unix: ${Math.floor(this.replayDatetime.getTime() / 1000)}`);
 
     // Run single scan for the selected datetime
@@ -390,8 +508,18 @@ class SPYDashboard {
       // Update all patterns list
       this.updateAllPatternsList(allPatterns);
 
-      // Trigger alert if needed
-      if (combinedSignal.strength >= 50 && Date.now() - this.lastAlertTime > this.alertCooldown) {
+      // Update signal detail panel with indicator values and reasons
+      this.updateSignalDetails(combinedSignal, allPatterns);
+
+      // Track signal for backtesting (in replay mode)
+      if (this.dataMode === 'replay' && combinedSignal.strength >= 50) {
+        this.trackBacktestSignal(combinedSignal, allPatterns, priceData);
+      }
+
+      // Trigger alert only for GOOD START POINTS
+      // Requires: strength >= 60 AND at least 2 indicator confirmations AND 2+ timeframes
+      if (this.isGoodStartPoint(combinedSignal, allPatterns) &&
+          Date.now() - this.lastAlertTime > this.alertCooldown) {
         this.triggerAlert(combinedSignal, allPatterns);
       }
 
@@ -400,10 +528,307 @@ class SPYDashboard {
     }
   }
 
+  /**
+   * Determine if current signal is a GOOD START POINT for entry
+   * Based on 2025 best practices: multiple indicator confluence required
+   */
+  isGoodStartPoint(signal, patterns) {
+    // Must have minimum strength
+    if (signal.strength < 60) return false;
+
+    // Must have at least 2 timeframes confirming
+    if (signal.activeTimeframes.length < 2) return false;
+
+    // Count indicator-based patterns for the dominant direction
+    const indicatorTypes = [
+      'RSI_OVERBOUGHT', 'RSI_OVERSOLD', 'RSI_BEARISH_DIVERGENCE', 'RSI_BULLISH_DIVERGENCE',
+      'BB_UPPER_TOUCH', 'BB_LOWER_TOUCH', 'BB_SQUEEZE_BULLISH', 'BB_SQUEEZE_BEARISH',
+      'EMA_BULLISH_CROSS', 'EMA_BEARISH_CROSS',
+      'MACD_BULLISH_CROSS', 'MACD_BEARISH_CROSS', 'MACD_HIST_BULLISH', 'MACD_HIST_BEARISH',
+      'VOLUME_SPIKE_BULLISH', 'VOLUME_SPIKE_BEARISH'
+    ];
+
+    const priceActionTypes = [
+      'LOWER_HIGH', 'HIGHER_LOW', 'REJECTION_AT_RESISTANCE', 'REJECTION_AT_SUPPORT',
+      'FALSE_BREAKOUT', 'FALSE_BREAKOUT_DOWN', 'ABSORPTION', 'ABSORPTION_BUYING',
+      'DOUBLE_REJECTION', 'DOUBLE_REJECTION_BOTTOM'
+    ];
+
+    // Filter patterns matching signal direction
+    const directionPatterns = patterns.filter(p => p.signal === signal.direction);
+
+    // Count indicator confirmations
+    let indicatorCount = 0;
+    let priceActionCount = 0;
+    const seenIndicatorCategories = new Set();
+
+    for (const p of directionPatterns) {
+      if (indicatorTypes.includes(p.type)) {
+        // Count unique indicator categories (RSI, BB, EMA, MACD, VOLUME)
+        const category = p.type.split('_')[0];
+        if (!seenIndicatorCategories.has(category)) {
+          seenIndicatorCategories.add(category);
+          indicatorCount++;
+        }
+      }
+      if (priceActionTypes.includes(p.type)) {
+        priceActionCount++;
+      }
+    }
+
+    // GOOD START POINT criteria:
+    // Option A: At least 2 different indicator categories confirming
+    // Option B: 1 indicator + 2 price action patterns
+    // Option C: Very high strength (75+) with any indicator confirmation
+    const hasIndicatorConfluence = indicatorCount >= 2;
+    const hasMixedConfluence = indicatorCount >= 1 && priceActionCount >= 2;
+    const hasStrongSignal = signal.strength >= 75 && indicatorCount >= 1;
+
+    const isGoodStart = hasIndicatorConfluence || hasMixedConfluence || hasStrongSignal;
+
+    if (isGoodStart) {
+      console.log(`[GOOD START POINT] ${signal.direction} ${signal.strength.toFixed(0)}% - ` +
+        `Indicators: ${indicatorCount} (${Array.from(seenIndicatorCategories).join(', ')}), ` +
+        `Price Action: ${priceActionCount}, TFs: ${signal.activeTimeframes.length}`);
+    }
+
+    return isGoodStart;
+  }
+
+  /**
+   * Update the signal detail panel with indicator values and signal reasons
+   */
+  updateSignalDetails(combinedSignal, allPatterns) {
+    // Update timestamp
+    const timestampEl = document.getElementById('signalTimestamp');
+    if (timestampEl) {
+      timestampEl.textContent = new Date().toLocaleString();
+    }
+
+    // Get the most recent indicator values from 5m timeframe (most sensitive)
+    const signal5m = this.signals[5];
+    const indicators = signal5m?.indicators || {};
+
+    // Store for reference
+    this.lastIndicators = indicators;
+
+    // Update RSI display
+    const rsiValue = document.getElementById('indRSI');
+    const rsiStatus = document.getElementById('indRSIStatus');
+    if (rsiValue && rsiStatus && indicators.rsi) {
+      rsiValue.textContent = indicators.rsi.value.toFixed(1);
+      rsiStatus.textContent = indicators.rsi.status;
+      rsiStatus.className = 'ind-status ' + (
+        indicators.rsi.status === 'OVERBOUGHT' ? 'bearish' :
+        indicators.rsi.status === 'OVERSOLD' ? 'bullish' : 'neutral'
+      );
+    }
+
+    // Update EMA display
+    const emaValue = document.getElementById('indEMA');
+    const emaStatus = document.getElementById('indEMAStatus');
+    if (emaValue && emaStatus && indicators.ema) {
+      const diff = ((indicators.ema.fast - indicators.ema.slow) / indicators.ema.slow * 100).toFixed(2);
+      emaValue.textContent = `${diff > 0 ? '+' : ''}${diff}%`;
+      emaStatus.textContent = indicators.ema.trend;
+      emaStatus.className = 'ind-status ' + (
+        indicators.ema.trend === 'BULLISH' ? 'bullish' :
+        indicators.ema.trend === 'BEARISH' ? 'bearish' : 'neutral'
+      );
+    }
+
+    // Update MACD display
+    const macdValue = document.getElementById('indMACD');
+    const macdStatus = document.getElementById('indMACDStatus');
+    if (macdValue && macdStatus && indicators.macd) {
+      macdValue.textContent = indicators.macd.histogram?.toFixed(3) || '--';
+      macdStatus.textContent = indicators.macd.momentum;
+      macdStatus.className = 'ind-status ' + (
+        indicators.macd.momentum === 'BULLISH' ? 'bullish' :
+        indicators.macd.momentum === 'BEARISH' ? 'bearish' : 'neutral'
+      );
+    }
+
+    // Update Bollinger Bands display
+    const bbValue = document.getElementById('indBB');
+    const bbStatus = document.getElementById('indBBStatus');
+    if (bbValue && bbStatus && indicators.bollingerBands && this.currentPrice) {
+      const bb = indicators.bollingerBands;
+      const position = ((this.currentPrice - bb.lower) / (bb.upper - bb.lower) * 100).toFixed(0);
+      bbValue.textContent = `${position}%`;
+
+      let bbStatusText = 'MID';
+      let bbStatusClass = 'neutral';
+      if (this.currentPrice >= bb.upper) {
+        bbStatusText = 'UPPER';
+        bbStatusClass = 'bearish';
+      } else if (this.currentPrice <= bb.lower) {
+        bbStatusText = 'LOWER';
+        bbStatusClass = 'bullish';
+      }
+      bbStatus.textContent = bbStatusText;
+      bbStatus.className = 'ind-status ' + bbStatusClass;
+    }
+
+    // Update signal reasons
+    const reasonsEl = document.getElementById('signalReasons');
+    if (!reasonsEl) return;
+
+    if (combinedSignal.direction === 'NEUTRAL' || combinedSignal.strength < 30) {
+      reasonsEl.innerHTML = '<p class="no-signal">No significant signal detected</p>';
+      return;
+    }
+
+    // Filter patterns for the signal direction and sort by strength
+    const strengthOrder = { 'VERY_HIGH': 4, 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+    const relevantPatterns = allPatterns
+      .filter(p => p.signal === combinedSignal.direction)
+      .sort((a, b) => (strengthOrder[b.strength] || 0) - (strengthOrder[a.strength] || 0))
+      .slice(0, 6);
+
+    if (relevantPatterns.length === 0) {
+      reasonsEl.innerHTML = '<p class="no-signal">No patterns for this direction</p>';
+      return;
+    }
+
+    reasonsEl.innerHTML = relevantPatterns.map(p => `
+      <div class="reason-item">
+        <span class="reason-icon">${PATTERN_ICONS[p.type] || '📊'}</span>
+        <div class="reason-text">
+          <strong>${p.name}</strong>
+          <span>${p.description}</span>
+        </div>
+        <span class="reason-weight">${p.strength}</span>
+      </div>
+    `).join('');
+  }
+
+  /**
+   * Track a signal for backtesting analysis
+   */
+  trackBacktestSignal(signal, patterns, candles) {
+    if (!candles || candles.length < 2) return;
+
+    const entryPrice = candles[candles.length - 1].close;
+    const entryTime = this.replayDatetime || new Date();
+
+    // Calculate outcome based on next candle movement
+    // Win requires at least 2 points move in the expected direction
+    const nextCandle = candles[candles.length - 1];
+    const priceMove = nextCandle.close - nextCandle.open;
+    const MIN_WIN_POINTS = 2; // Minimum points for a win (e.g., 685 to 683 for PUT)
+
+    let outcome = 'pending';
+    let profit = 0;
+
+    // Determine if the signal direction matches price movement
+    if (signal.direction === 'PUT') {
+      // PUT wins if price drops by at least 2 points
+      if (priceMove <= -MIN_WIN_POINTS) {
+        outcome = 'win';
+        profit = Math.abs(priceMove);
+      } else if (priceMove >= MIN_WIN_POINTS) {
+        // Loss if price goes up by 2+ points
+        outcome = 'loss';
+        profit = -Math.abs(priceMove);
+      }
+      // Otherwise stays 'pending' (less than 2 points either way)
+      this.backtestStats.putSignals++;
+    } else if (signal.direction === 'CALL') {
+      // CALL wins if price rises by at least 2 points
+      if (priceMove >= MIN_WIN_POINTS) {
+        outcome = 'win';
+        profit = Math.abs(priceMove);
+      } else if (priceMove <= -MIN_WIN_POINTS) {
+        // Loss if price drops by 2+ points
+        outcome = 'loss';
+        profit = -Math.abs(priceMove);
+      }
+      // Otherwise stays 'pending' (less than 2 points either way)
+      this.backtestStats.callSignals++;
+    }
+
+    const trade = {
+      time: entryTime,
+      direction: signal.direction,
+      strength: signal.strength,
+      entryPrice: entryPrice,
+      outcome: outcome,
+      profit: profit,
+      patterns: patterns.filter(p => p.signal === signal.direction).map(p => p.name).slice(0, 3)
+    };
+
+    this.backtestTrades.push(trade);
+    this.backtestStats.totalSignals++;
+
+    if (outcome === 'win') this.backtestStats.wins++;
+    if (outcome === 'loss') this.backtestStats.losses++;
+    this.backtestStats.totalProfit += profit;
+
+    // Update display
+    this.updateBacktestDisplay();
+
+    console.log(`[BACKTEST] ${signal.direction} signal at ${entryPrice.toFixed(2)} - ${outcome} (${profit >= 0 ? '+' : ''}${profit.toFixed(1)} pts)`);
+  }
+
+  /**
+   * Update backtest statistics display
+   */
+  updateBacktestDisplay() {
+    const totalEl = document.getElementById('btTotalSignals');
+    const winRateEl = document.getElementById('btWinRate');
+    const avgProfitEl = document.getElementById('btAvgProfit');
+    const putEl = document.getElementById('btPutSignals');
+    const callEl = document.getElementById('btCallSignals');
+
+    if (totalEl) totalEl.textContent = this.backtestStats.totalSignals;
+    if (putEl) putEl.textContent = this.backtestStats.putSignals;
+    if (callEl) callEl.textContent = this.backtestStats.callSignals;
+
+    if (winRateEl) {
+      const total = this.backtestStats.wins + this.backtestStats.losses;
+      if (total > 0) {
+        const rate = (this.backtestStats.wins / total * 100).toFixed(1);
+        winRateEl.textContent = `${rate}%`;
+        winRateEl.className = parseFloat(rate) >= 50 ? 'positive' : 'negative';
+      } else {
+        winRateEl.textContent = '--';
+      }
+    }
+
+    if (avgProfitEl) {
+      if (this.backtestStats.totalSignals > 0) {
+        const avg = (this.backtestStats.totalProfit / this.backtestStats.totalSignals).toFixed(1);
+        avgProfitEl.textContent = `${parseFloat(avg) >= 0 ? '+' : ''}${avg} pts`;
+        avgProfitEl.className = parseFloat(avg) >= 0 ? 'positive' : 'negative';
+      } else {
+        avgProfitEl.textContent = '--';
+      }
+    }
+  }
+
+  /**
+   * Reset backtest statistics
+   */
+  resetBacktest() {
+    this.backtestTrades = [];
+    this.backtestStats = {
+      totalSignals: 0,
+      putSignals: 0,
+      callSignals: 0,
+      wins: 0,
+      losses: 0,
+      totalProfit: 0
+    };
+    this.updateBacktestDisplay();
+  }
+
   calculateCombinedSignal() {
     let putWeight = 0;
     let callWeight = 0;
     let activeTimeframes = [];
+    let totalIndicatorCount = 0;
+    let indicatorCategories = new Set();
 
     for (const tf of this.timeframes) {
       const signal = this.signals[tf];
@@ -413,6 +838,18 @@ class SPYDashboard {
           putWeight += signal.putWeight || signal.strength;
         } else if (signal.direction === 'CALL') {
           callWeight += signal.callWeight || signal.strength;
+        }
+
+        // Track indicator counts from V2 signals
+        if (signal.putIndicatorCount) totalIndicatorCount += signal.putIndicatorCount;
+        if (signal.callIndicatorCount) totalIndicatorCount += signal.callIndicatorCount;
+
+        // Track indicator summary
+        if (signal.indicators) {
+          if (signal.indicators.rsi) indicatorCategories.add('RSI');
+          if (signal.indicators.ema) indicatorCategories.add('EMA');
+          if (signal.indicators.macd) indicatorCategories.add('MACD');
+          if (signal.indicators.bollingerBands) indicatorCategories.add('BB');
         }
       }
     }
@@ -429,11 +866,15 @@ class SPYDashboard {
       dominantWeight = callWeight;
     }
 
-    // Confluence bonus
+    // Confluence bonus - enhanced with indicator bonus
     let confluenceBonus = 0;
     if (activeTimeframes.length >= 4) confluenceBonus = 25;
     else if (activeTimeframes.length === 3) confluenceBonus = 15;
     else if (activeTimeframes.length === 2) confluenceBonus = 10;
+
+    // Additional indicator confluence bonus
+    if (indicatorCategories.size >= 3) confluenceBonus += 10;
+    else if (indicatorCategories.size >= 2) confluenceBonus += 5;
 
     // Calculate combined strength based on dominance
     const totalWeight = putWeight + callWeight;
@@ -447,7 +888,9 @@ class SPYDashboard {
       activeTimeframes,
       putWeight,
       callWeight,
-      confluenceBonus
+      confluenceBonus,
+      indicatorCount: totalIndicatorCount,
+      indicatorCategories: Array.from(indicatorCategories)
     };
   }
 
@@ -1042,10 +1485,30 @@ class SPYDashboard {
       `<span class="alert-popup-tf">${TF_CONFIG[tf].name}</span>`
     ).join('');
 
+    // Get indicator patterns for display
+    const indicatorPatterns = patterns.filter(p =>
+      p.signal === signal.direction && (
+        p.type.startsWith('RSI_') || p.type.startsWith('BB_') ||
+        p.type.startsWith('EMA_') || p.type.startsWith('MACD_') ||
+        p.type.startsWith('VOLUME_')
+      )
+    );
+
+    const pricePatterns = patterns.filter(p =>
+      p.signal === signal.direction && !indicatorPatterns.includes(p)
+    );
+
     contentEl.innerHTML = `
+      <p style="color:#4ade80;font-weight:bold;">GOOD START POINT</p>
       <p><strong>Direction:</strong> ${signal.direction}</p>
-      <p><strong>Confluence:</strong> ${signal.activeTimeframes.length}/4 timeframes</p>
-      <p style="margin-top:8px;"><strong>Patterns:</strong> ${patterns.slice(0, 3).map(p => `${p.name} (${p.signal})`).join(', ')}</p>
+      <p><strong>Timeframes:</strong> ${signal.activeTimeframes.length}/4 aligned</p>
+      ${signal.indicatorCategories && signal.indicatorCategories.length > 0 ?
+        `<p><strong>Indicators:</strong> ${signal.indicatorCategories.join(', ')}</p>` : ''}
+      <p style="margin-top:8px;"><strong>Key Signals:</strong></p>
+      <ul style="margin:4px 0 0 16px;padding:0;font-size:11px;">
+        ${indicatorPatterns.slice(0, 3).map(p => `<li>${p.name}</li>`).join('')}
+        ${pricePatterns.slice(0, 2).map(p => `<li>${p.name}</li>`).join('')}
+      </ul>
     `;
 
     strengthEl.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
