@@ -187,9 +187,18 @@ class SPYDashboard {
 
   setDataMode(mode) {
     this.dataMode = mode;
-    document.getElementById('realtimeBtn').classList.toggle('active', mode === 'realtime');
-    document.getElementById('replayBtn').classList.toggle('active', mode === 'replay');
-    document.getElementById('statusText').textContent = mode === 'realtime' ? 'Live' : 'Replay';
+
+    // Update buttons
+    const realtimeBtn = document.getElementById('realtimeBtn');
+    const replayBtn = document.getElementById('replayBtn');
+    const statusText = document.getElementById('statusText');
+
+    if (realtimeBtn) realtimeBtn.classList.toggle('active', mode === 'realtime');
+    if (replayBtn) replayBtn.classList.toggle('active', mode === 'replay');
+    if (statusText) {
+      statusText.textContent = mode === 'realtime' ? 'Live' : 'Replay Mode';
+      statusText.style.color = mode === 'realtime' ? '#4ade80' : '#60a5fa';
+    }
 
     // Show/hide replay controls
     const replayControls = document.getElementById('replayControls');
@@ -214,21 +223,45 @@ class SPYDashboard {
     } else {
       // Stop auto-refresh in replay mode
       if (this.scanTimer) clearInterval(this.scanTimer);
-      // Initialize replay chart if needed
-      this.initReplayChart();
+
+      // Initialize replay chart after a short delay to ensure container is visible
+      setTimeout(() => {
+        this.initReplayChart();
+      }, 100);
+
+      console.log('[SPY Dashboard] Switched to Replay mode - select a date and click Go');
     }
   }
 
   initReplayChart() {
-    if (this.replayChart) return; // Already initialized
-
     const container = document.getElementById('replay_chart');
-    if (!container || typeof LightweightCharts === 'undefined') {
-      console.warn('[SPY Dashboard] Lightweight Charts not available');
+    if (!container) {
+      console.warn('[SPY Dashboard] Replay chart container not found');
       return;
     }
 
+    if (typeof LightweightCharts === 'undefined') {
+      console.warn('[SPY Dashboard] Lightweight Charts library not loaded');
+      container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;"><p>Loading chart library...</p></div>';
+      return;
+    }
+
+    // Clean up existing chart if any
+    if (this.replayChart) {
+      this.replayChart.remove();
+      this.replayChart = null;
+      this.replayCandleSeries = null;
+    }
+
+    // Get container dimensions
+    const width = container.clientWidth || 800;
+    const height = 350;
+
+    console.log(`[SPY Dashboard] Creating replay chart: ${width}x${height}`);
+
     this.replayChart = LightweightCharts.createChart(container, {
+      width: width,
+      height: height,
       layout: {
         background: { type: 'solid', color: '#1a1a2e' },
         textColor: '#999'
@@ -260,39 +293,75 @@ class SPYDashboard {
     });
 
     // Handle resize
-    window.addEventListener('resize', () => {
+    const resizeHandler = () => {
       if (this.replayChart && this.dataMode === 'replay') {
-        this.replayChart.applyOptions({ width: container.clientWidth });
+        const newWidth = container.clientWidth || 800;
+        this.replayChart.applyOptions({ width: newWidth });
       }
-    });
+    };
+
+    // Remove old listener and add new one
+    window.removeEventListener('resize', this._replayResizeHandler);
+    this._replayResizeHandler = resizeHandler;
+    window.addEventListener('resize', resizeHandler);
+
+    console.log('[SPY Dashboard] Replay chart initialized');
   }
 
   updateReplayChart(candles) {
-    if (!this.replayCandleSeries || !candles || candles.length === 0) return;
+    if (!candles || candles.length === 0) {
+      console.warn('[SPY Dashboard] No candles to display in replay chart');
+      return;
+    }
+
+    // Initialize chart if not ready
+    if (!this.replayChart || !this.replayCandleSeries) {
+      console.log('[SPY Dashboard] Initializing replay chart for data display');
+      this.initReplayChart();
+      if (!this.replayCandleSeries) {
+        console.error('[SPY Dashboard] Failed to initialize replay chart');
+        return;
+      }
+    }
 
     // Convert candles to Lightweight Charts format
-    const chartData = candles.map(c => ({
-      time: Math.floor(c.time / 1000), // Convert ms to seconds
-      open: c.open,
-      high: c.high,
-      low: c.low,
-      close: c.close
-    }));
+    // Sort by time and filter invalid data
+    const chartData = candles
+      .filter(c => c.time && c.open && c.high && c.low && c.close)
+      .map(c => ({
+        time: Math.floor(c.time / 1000), // Convert ms to seconds
+        open: c.open,
+        high: c.high,
+        low: c.low,
+        close: c.close
+      }))
+      .sort((a, b) => a.time - b.time);
 
-    this.replayCandleSeries.setData(chartData);
-    this.replayChart.timeScale().fitContent();
+    if (chartData.length === 0) {
+      console.warn('[SPY Dashboard] No valid candle data after filtering');
+      return;
+    }
+
+    console.log(`[SPY Dashboard] Updating replay chart with ${chartData.length} candles`);
+
+    try {
+      this.replayCandleSeries.setData(chartData);
+      this.replayChart.timeScale().fitContent();
+    } catch (e) {
+      console.error('[SPY Dashboard] Error updating replay chart:', e);
+    }
   }
 
   async runReplay() {
-    const datetimeInput = document.getElementById('replayDatetime').value;
-    if (!datetimeInput) {
+    const datetimeInput = document.getElementById('replayDatetime');
+    if (!datetimeInput || !datetimeInput.value) {
       alert('Please select a date and time');
       return;
     }
 
     // Parse datetime-local input properly (it's in local time)
     // Format: "2024-01-15T14:30"
-    const [datePart, timePart] = datetimeInput.split('T');
+    const [datePart, timePart] = datetimeInput.value.split('T');
     const [year, month, day] = datePart.split('-').map(Number);
     const [hours, minutes] = timePart.split(':').map(Number);
 
@@ -315,8 +384,16 @@ class SPYDashboard {
 
     this.dataCache = {}; // Clear cache
 
-    document.getElementById('statusText').textContent = `Replay: ${this.replayDatetime.toLocaleString()}`;
-    document.getElementById('statusText').style.color = '#60a5fa'; // Blue for replay mode
+    // Initialize replay chart if needed
+    this.initReplayChart();
+
+    // Update status
+    const statusText = document.getElementById('statusText');
+    if (statusText) {
+      statusText.textContent = `Replay: ${this.replayDatetime.toLocaleString()}`;
+      statusText.style.color = '#60a5fa'; // Blue for replay mode
+    }
+
     console.log(`[SPY Dashboard] Replay datetime: ${this.replayDatetime.toISOString()}, Unix: ${Math.floor(this.replayDatetime.getTime() / 1000)}`);
 
     // Run single scan for the selected datetime
