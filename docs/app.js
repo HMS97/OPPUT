@@ -712,34 +712,39 @@ class SPYDashboard {
     const entryPrice = candles[candles.length - 1].close;
     const entryTime = this.replayDatetime || new Date();
 
-    // Calculate outcome based on next candle movement (simplified)
-    // In real backtesting, you'd wait and check actual outcome
+    // Calculate outcome based on next candle movement
+    // Win requires at least 2 points move in the expected direction
     const nextCandle = candles[candles.length - 1];
     const priceMove = nextCandle.close - nextCandle.open;
+    const MIN_WIN_POINTS = 2; // Minimum points for a win (e.g., 685 to 683 for PUT)
 
     let outcome = 'pending';
     let profit = 0;
 
     // Determine if the signal direction matches price movement
     if (signal.direction === 'PUT') {
-      // PUT wins if price goes down
-      if (priceMove < 0) {
+      // PUT wins if price drops by at least 2 points
+      if (priceMove <= -MIN_WIN_POINTS) {
         outcome = 'win';
-        profit = Math.abs(priceMove / entryPrice) * 100;
-      } else if (priceMove > 0) {
+        profit = Math.abs(priceMove);
+      } else if (priceMove >= MIN_WIN_POINTS) {
+        // Loss if price goes up by 2+ points
         outcome = 'loss';
-        profit = -Math.abs(priceMove / entryPrice) * 100;
+        profit = -Math.abs(priceMove);
       }
+      // Otherwise stays 'pending' (less than 2 points either way)
       this.backtestStats.putSignals++;
     } else if (signal.direction === 'CALL') {
-      // CALL wins if price goes up
-      if (priceMove > 0) {
+      // CALL wins if price rises by at least 2 points
+      if (priceMove >= MIN_WIN_POINTS) {
         outcome = 'win';
-        profit = Math.abs(priceMove / entryPrice) * 100;
-      } else if (priceMove < 0) {
+        profit = Math.abs(priceMove);
+      } else if (priceMove <= -MIN_WIN_POINTS) {
+        // Loss if price drops by 2+ points
         outcome = 'loss';
-        profit = -Math.abs(priceMove / entryPrice) * 100;
+        profit = -Math.abs(priceMove);
       }
+      // Otherwise stays 'pending' (less than 2 points either way)
       this.backtestStats.callSignals++;
     }
 
@@ -763,7 +768,7 @@ class SPYDashboard {
     // Update display
     this.updateBacktestDisplay();
 
-    console.log(`[BACKTEST] ${signal.direction} signal at ${entryPrice.toFixed(2)} - ${outcome} (${profit.toFixed(2)}%)`);
+    console.log(`[BACKTEST] ${signal.direction} signal at ${entryPrice.toFixed(2)} - ${outcome} (${profit >= 0 ? '+' : ''}${profit.toFixed(1)} pts)`);
   }
 
   /**
@@ -793,8 +798,8 @@ class SPYDashboard {
 
     if (avgProfitEl) {
       if (this.backtestStats.totalSignals > 0) {
-        const avg = (this.backtestStats.totalProfit / this.backtestStats.totalSignals).toFixed(2);
-        avgProfitEl.textContent = `${parseFloat(avg) >= 0 ? '+' : ''}${avg}%`;
+        const avg = (this.backtestStats.totalProfit / this.backtestStats.totalSignals).toFixed(1);
+        avgProfitEl.textContent = `${parseFloat(avg) >= 0 ? '+' : ''}${avg} pts`;
         avgProfitEl.className = parseFloat(avg) >= 0 ? 'positive' : 'negative';
       } else {
         avgProfitEl.textContent = '--';
