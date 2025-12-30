@@ -17,7 +17,80 @@ class SPYOptionsAnalyzer {
     this.refreshTimer = null;
     this.oiChart = null;
 
+    // CORS proxies for client-side fetching (ordered by reliability)
+    this.corsProxies = [
+      // Most reliable first
+      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+      (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+      (u) => `https://proxy.cors.sh/${u}`,
+      (u) => `https://cors-anywhere.herokuapp.com/${u}`,
+      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+      (u) => `https://thingproxy.freeboard.io/fetch/${u}`,
+      (u) => `https://crossorigin.me/${u}`,
+      (u) => `https://yacdn.org/proxy/${u}`
+    ];
+
     this.init();
+  }
+
+  /**
+   * Fetch URL through CORS proxies with retries
+   */
+  async fetchWithProxy(url, options = {}) {
+    // Try backend API first if path starts with /api
+    if (url.startsWith('/api')) {
+      try {
+        const response = await fetch(url, { ...options, signal: AbortSignal.timeout(8000) });
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (e) {
+        console.log('[SPY Options] Backend unavailable');
+      }
+      return null;
+    }
+
+    // Try each CORS proxy
+    for (let i = 0; i < this.corsProxies.length; i++) {
+      const proxyFn = this.corsProxies[i];
+      try {
+        const proxyUrl = proxyFn(url);
+        console.log(`[SPY Options] Trying proxy ${i + 1}/${this.corsProxies.length}...`);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+        const response = await fetch(proxyUrl, {
+          ...options,
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json',
+            ...options.headers
+          }
+        });
+
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const text = await response.text();
+          try {
+            const data = JSON.parse(text);
+            console.log(`[SPY Options] Proxy ${i + 1} succeeded`);
+            return data;
+          } catch (e) {
+            console.log(`[SPY Options] Proxy ${i + 1} returned invalid JSON`);
+          }
+        }
+      } catch (e) {
+        if (e.name === 'AbortError') {
+          console.log(`[SPY Options] Proxy ${i + 1} timed out`);
+        } else {
+          console.log(`[SPY Options] Proxy ${i + 1} failed:`, e.message);
+        }
+      }
+    }
+
+    throw new Error('All CORS proxies failed');
   }
 
   async init() {
@@ -91,112 +164,60 @@ class SPYOptionsAnalyzer {
   }
 
   async fetchSpotPrice() {
-    // Try backend API first (no CORS issues)
-    try {
-      console.log('[SPY Options] Fetching spot price from backend...');
-      const response = await fetch(`/api/quote/${this.symbol}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          this.spotPrice = data.price;
-          this.prevClose = data.previousClose;
-          this.updatePriceDisplay();
-          console.log('[SPY Options] Spot price fetched from backend:', this.spotPrice);
-          return;
-        }
-      }
-    } catch (e) {
-      console.log('[SPY Options] Backend unavailable, trying proxies...', e.message);
+    console.log('[SPY Options] Fetching spot price...');
+
+    // Try backend API first
+    const backendData = await this.fetchWithProxy(`/api/quote/${this.symbol}`);
+    if (backendData?.success) {
+      this.spotPrice = backendData.price;
+      this.prevClose = backendData.previousClose;
+      this.updatePriceDisplay();
+      console.log('[SPY Options] Spot price from backend:', this.spotPrice);
+      return;
     }
 
-    // Fallback to CORS proxies
+    // Fallback to Yahoo Finance via CORS proxies
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${this.symbol}?interval=1d&range=2d`;
+    const data = await this.fetchWithProxy(url);
 
-    const proxies = [
-      (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-      (u) => `https://thingproxy.freeboard.io/fetch/${u}`
-    ];
+    if (data?.chart?.result?.[0]) {
+      const result = data.chart.result[0];
+      const meta = result.meta;
+      const quotes = result.indicators?.quote?.[0];
 
-    let lastError = null;
-    for (const proxyFn of proxies) {
-      try {
-        const proxyUrl = proxyFn(url);
-        console.log('[SPY Options] Trying proxy for spot price...');
-        const response = await fetch(proxyUrl, { timeout: 10000 });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.chart?.result?.[0]) {
-            const result = data.chart.result[0];
-            const quotes = result.indicators.quote[0];
-            const meta = result.meta;
+      this.spotPrice = meta.regularMarketPrice;
+      this.prevClose = meta.previousClose || (quotes?.close ? quotes.close[quotes.close.length - 2] : null);
 
-            this.spotPrice = meta.regularMarketPrice;
-            this.prevClose = meta.previousClose || quotes.close[quotes.close.length - 2];
-
-            this.updatePriceDisplay();
-            console.log('[SPY Options] Spot price fetched successfully');
-            return;
-          }
-        }
-      } catch (e) {
-        lastError = e;
-        console.log('[SPY Options] Proxy failed, trying next...');
-        continue;
-      }
+      this.updatePriceDisplay();
+      console.log('[SPY Options] Spot price fetched:', this.spotPrice);
+      return;
     }
 
-    throw new Error(`Failed to fetch spot price: ${lastError?.message || 'All proxies failed'}`);
+    throw new Error('Failed to fetch spot price');
   }
 
   async fetchExpiries() {
-    // Try backend API first (no CORS issues)
-    try {
-      console.log('[SPY Options] Fetching expiries from backend...');
-      const response = await fetch(`/api/options/${this.symbol}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.expirationDates) {
-          this.availableExpiries = data.expirationDates;
-          console.log(`[SPY Options] Available expiries from backend: ${this.availableExpiries.length}`);
-          return;
-        }
-      }
-    } catch (e) {
-      console.log('[SPY Options] Backend unavailable for expiries, trying proxies...', e.message);
+    console.log('[SPY Options] Fetching expiries...');
+
+    // Try backend API first
+    const backendData = await this.fetchWithProxy(`/api/options/${this.symbol}`);
+    if (backendData?.success && backendData.expirationDates) {
+      this.availableExpiries = backendData.expirationDates;
+      console.log(`[SPY Options] Expiries from backend: ${this.availableExpiries.length}`);
+      return;
     }
 
-    // Fallback to CORS proxies
+    // Fallback to Yahoo Finance via CORS proxies
     const url = `https://query1.finance.yahoo.com/v7/finance/options/${this.symbol}`;
+    const data = await this.fetchWithProxy(url);
 
-    const proxies = [
-      (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-      (u) => `https://thingproxy.freeboard.io/fetch/${u}`
-    ];
-
-    let lastError = null;
-    for (const proxyFn of proxies) {
-      try {
-        console.log('[SPY Options] Trying proxy for expiries...');
-        const response = await fetch(proxyFn(url), { timeout: 10000 });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.optionChain?.result?.[0]?.expirationDates) {
-            this.availableExpiries = data.optionChain.result[0].expirationDates;
-            console.log(`[SPY Options] Available expiries: ${this.availableExpiries.length}`);
-            return;
-          }
-        }
-      } catch (e) {
-        lastError = e;
-        continue;
-      }
+    if (data?.optionChain?.result?.[0]?.expirationDates) {
+      this.availableExpiries = data.optionChain.result[0].expirationDates;
+      console.log(`[SPY Options] Expiries fetched: ${this.availableExpiries.length}`);
+      return;
     }
 
-    throw new Error(`Failed to fetch expiries: ${lastError?.message || 'All proxies failed'}`);
+    throw new Error('Failed to fetch expiries');
   }
 
   selectExpiry() {
@@ -246,52 +267,27 @@ class SPYOptionsAnalyzer {
       throw new Error('No expiry selected');
     }
 
-    // Try backend API first (no CORS issues)
-    try {
-      console.log('[SPY Options] Fetching options chain from backend...');
-      const response = await fetch(`/api/options/${this.symbol}/${this.selectedExpiry}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.options) {
-          this.optionsData = { options: data.options };
-          console.log(`[SPY Options] Loaded chain from backend: ${this.optionsData.options[0]?.calls?.length || 0} calls, ${this.optionsData.options[0]?.puts?.length || 0} puts`);
-          return;
-        }
-      }
-    } catch (e) {
-      console.log('[SPY Options] Backend unavailable for options chain, trying proxies...', e.message);
+    console.log('[SPY Options] Fetching options chain...');
+
+    // Try backend API first
+    const backendData = await this.fetchWithProxy(`/api/options/${this.symbol}/${this.selectedExpiry}`);
+    if (backendData?.success && backendData.options) {
+      this.optionsData = { options: backendData.options };
+      console.log(`[SPY Options] Chain from backend: ${this.optionsData.options[0]?.calls?.length || 0} calls, ${this.optionsData.options[0]?.puts?.length || 0} puts`);
+      return;
     }
 
-    // Fallback to CORS proxies
+    // Fallback to Yahoo Finance via CORS proxies
     const url = `https://query1.finance.yahoo.com/v7/finance/options/${this.symbol}?date=${this.selectedExpiry}`;
+    const data = await this.fetchWithProxy(url);
 
-    const proxies = [
-      (u) => `https://corsproxy.io/?${encodeURIComponent(u)}`,
-      (u) => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-      (u) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
-      (u) => `https://thingproxy.freeboard.io/fetch/${u}`
-    ];
-
-    let lastError = null;
-    for (const proxyFn of proxies) {
-      try {
-        console.log('[SPY Options] Trying proxy for options chain...');
-        const response = await fetch(proxyFn(url), { timeout: 15000 });
-        if (response.ok) {
-          const data = await response.json();
-          if (data.optionChain?.result?.[0]) {
-            this.optionsData = data.optionChain.result[0];
-            console.log(`[SPY Options] Loaded chain: ${this.optionsData.options[0]?.calls?.length || 0} calls, ${this.optionsData.options[0]?.puts?.length || 0} puts`);
-            return;
-          }
-        }
-      } catch (e) {
-        lastError = e;
-        continue;
-      }
+    if (data?.optionChain?.result?.[0]) {
+      this.optionsData = data.optionChain.result[0];
+      console.log(`[SPY Options] Chain fetched: ${this.optionsData.options[0]?.calls?.length || 0} calls, ${this.optionsData.options[0]?.puts?.length || 0} puts`);
+      return;
     }
 
-    throw new Error(`Failed to fetch options chain: ${lastError?.message || 'All proxies failed'}`);
+    throw new Error('Failed to fetch options chain');
   }
 
   calculateMetrics() {
