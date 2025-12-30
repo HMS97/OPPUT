@@ -1,0 +1,5 @@
+name = "yahoo-finance-proxy"
+main = "worker.js"
+compatibility_date = "2025-12-30"
+
+# No assets needed - this is a pure API worker
