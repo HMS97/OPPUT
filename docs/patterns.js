@@ -1,6 +1,6 @@
 /**
- * PUT Pattern Recognition Library
- * Detects short/put trading opportunities based on price action patterns
+ * Balanced Pattern Recognition Library
+ * Detects both PUT (bearish) and CALL (bullish) trading opportunities
  */
 
 class PutPatternDetector {
@@ -9,14 +9,17 @@ class PutPatternDetector {
       rejectionThreshold: 0.003, // 0.3% wick rejection
       consolidationBars: 3, // Min bars for consolidation
       lowerHighTolerance: 0.001, // 0.1% tolerance for lower high
+      higherLowTolerance: 0.001, // 0.1% tolerance for higher low
       falseBreakoutThreshold: 0.002, // 0.2% for false breakout
       ...config
     };
     this.patterns = [];
+    this.putPatterns = [];
+    this.callPatterns = [];
   }
 
   /**
-   * Analyze candle data and detect PUT patterns
+   * Analyze candle data and detect both PUT and CALL patterns
    * @param {Array} candles - Array of {open, high, low, close, time}
    * @returns {Array} Detected patterns with signals
    */
@@ -24,21 +27,30 @@ class PutPatternDetector {
     if (!candles || candles.length < 10) return [];
 
     this.patterns = [];
+    this.putPatterns = [];
+    this.callPatterns = [];
 
-    // Run all pattern detectors
-    this.detectLowerHigh(candles);
-    this.detectRejectionAtResistance(candles);
-    this.detectFalseBreakout(candles);
-    this.detectAbsorption(candles);
-    this.detectDoubleRejection(candles);
-    this.detectPriceStalling(candles);
+    // Run all pattern detectors for both directions
+    this.detectLowerHigh(candles);      // PUT signal
+    this.detectHigherLow(candles);       // CALL signal
+    this.detectRejectionAtResistance(candles);  // PUT signal
+    this.detectRejectionAtSupport(candles);     // CALL signal
+    this.detectFalseBreakoutUp(candles);        // PUT signal
+    this.detectFalseBreakoutDown(candles);      // CALL signal
+    this.detectAbsorptionSelling(candles);      // PUT signal
+    this.detectAbsorptionBuying(candles);       // CALL signal
+    this.detectDoubleRejectionTop(candles);     // PUT signal
+    this.detectDoubleRejectionBottom(candles);  // CALL signal
+    this.detectPriceStallingHigh(candles);      // PUT signal
+    this.detectPriceStallingLow(candles);       // CALL signal
 
     return this.patterns;
   }
 
+  // ==================== PUT PATTERNS ====================
+
   /**
-   * Detect Lower High pattern (后面有了跟进 Lower High)
-   * Price makes a high, then makes a lower high
+   * Detect Lower High pattern (bearish)
    */
   detectLowerHigh(candles) {
     const swingHighs = this.findSwingHighs(candles, 5);
@@ -47,26 +59,26 @@ class PutPatternDetector {
       const prevHigh = swingHighs[i - 1];
       const currHigh = swingHighs[i];
 
-      // Check if current high is lower than previous
       if (currHigh.high < prevHigh.high * (1 - this.config.lowerHighTolerance)) {
-        this.patterns.push({
+        const pattern = {
           type: 'LOWER_HIGH',
-          name: 'Lower High (跟进)',
+          name: 'Lower High',
           signal: 'PUT',
           strength: 'MEDIUM',
           index: currHigh.index,
           price: currHigh.high,
-          description: '价格形成更低的高点，显示上涨动能减弱',
+          description: 'Price forms lower high - weakening upward momentum',
           stopLoss: prevHigh.high,
           entry: currHigh.close
-        });
+        };
+        this.patterns.push(pattern);
+        this.putPatterns.push(pattern);
       }
     }
   }
 
   /**
-   * Detect rejection at resistance zones
-   * (在价格行为上立即被拒绝)
+   * Detect rejection at resistance zones (bearish)
    */
   detectRejectionAtResistance(candles) {
     const resistanceLevels = this.findResistanceLevels(candles);
@@ -74,40 +86,38 @@ class PutPatternDetector {
     for (let i = 5; i < candles.length; i++) {
       const candle = candles[i];
       const upperWick = candle.high - Math.max(candle.open, candle.close);
-      const body = Math.abs(candle.close - candle.open);
       const totalRange = candle.high - candle.low;
 
       if (totalRange === 0) continue;
 
-      // Check for rejection wick (upper wick > 60% of total range)
       const wickRatio = upperWick / totalRange;
 
       for (const resistance of resistanceLevels) {
-        // If high touches resistance and has rejection wick
         if (candle.high >= resistance * 0.998 &&
             candle.high <= resistance * 1.002 &&
             wickRatio > 0.6) {
-          this.patterns.push({
+          const pattern = {
             type: 'REJECTION_AT_RESISTANCE',
-            name: 'Rejection at Resistance (拒绝)',
+            name: 'Rejection at Resistance',
             signal: 'PUT',
             strength: 'HIGH',
             index: i,
             price: candle.high,
-            description: '价格触及阻力位后立即被拒绝',
+            description: 'Price rejected at resistance level',
             stopLoss: candle.high * 1.002,
             entry: candle.close
-          });
+          };
+          this.patterns.push(pattern);
+          this.putPatterns.push(pattern);
         }
       }
     }
   }
 
   /**
-   * Detect false breakout (假向上突破)
-   * Price breaks above resistance then quickly reverses
+   * Detect false breakout upward (bearish)
    */
-  detectFalseBreakout(candles) {
+  detectFalseBreakoutUp(candles) {
     const resistanceLevels = this.findResistanceLevels(candles);
 
     for (let i = 5; i < candles.length - 1; i++) {
@@ -115,23 +125,23 @@ class PutPatternDetector {
       const nextCandle = candles[i + 1];
 
       for (const resistance of resistanceLevels) {
-        // Check if candle breaks above resistance
         if (candle.high > resistance * 1.002) {
-          // Check if it closes back below or next candle reverses
           if (candle.close < resistance ||
               (nextCandle && nextCandle.close < nextCandle.open &&
                nextCandle.close < resistance)) {
-            this.patterns.push({
+            const pattern = {
               type: 'FALSE_BREAKOUT',
-              name: 'False Breakout (假突破)',
+              name: 'False Breakout Up',
               signal: 'PUT',
               strength: 'HIGH',
               index: i,
               price: candle.high,
-              description: '价格假向上突破后立即回落，是做空的好机会',
+              description: 'Failed upward breakout - price reverses down',
               stopLoss: candle.high * 1.003,
               entry: nextCandle ? nextCandle.open : candle.close
-            });
+            };
+            this.patterns.push(pattern);
+            this.putPatterns.push(pattern);
           }
         }
       }
@@ -139,10 +149,9 @@ class PutPatternDetector {
   }
 
   /**
-   * Detect absorption pattern (蜡烛的影线向上延伸)
-   * Long upper wicks showing selling pressure
+   * Detect absorption selling pressure (bearish)
    */
-  detectAbsorption(candles) {
+  detectAbsorptionSelling(candles) {
     for (let i = 3; i < candles.length; i++) {
       const recentCandles = candles.slice(i - 3, i + 1);
       let absorptionCount = 0;
@@ -156,75 +165,68 @@ class PutPatternDetector {
         }
       }
 
-      // Multiple candles with long upper wicks = absorption
       if (absorptionCount >= 2) {
         const candle = candles[i];
-        this.patterns.push({
+        const pattern = {
           type: 'ABSORPTION',
-          name: 'Absorption (吸收)',
+          name: 'Selling Absorption',
           signal: 'PUT',
           strength: 'MEDIUM',
           index: i,
           price: candle.high,
-          description: '多根蜡烛上影线延伸，显示卖压吸收',
+          description: 'Multiple upper wicks show selling pressure',
           stopLoss: Math.max(...recentCandles.map(c => c.high)) * 1.002,
           entry: candle.close
-        });
+        };
+        this.patterns.push(pattern);
+        this.putPatterns.push(pattern);
       }
     }
   }
 
   /**
-   * Detect double/multiple rejection (第一次拒绝, 第二次拒绝)
-   * Price gets rejected multiple times at similar levels
+   * Detect double rejection at top (bearish)
    */
-  detectDoubleRejection(candles) {
+  detectDoubleRejectionTop(candles) {
     const rejections = [];
 
-    // Find all rejection points
     for (let i = 2; i < candles.length; i++) {
       const candle = candles[i];
       const upperWick = candle.high - Math.max(candle.open, candle.close);
       const totalRange = candle.high - candle.low;
 
       if (totalRange > 0 && upperWick / totalRange > 0.5) {
-        rejections.push({
-          index: i,
-          high: candle.high,
-          close: candle.close
-        });
+        rejections.push({ index: i, high: candle.high, close: candle.close });
       }
     }
 
-    // Find rejections at similar levels
     for (let i = 1; i < rejections.length; i++) {
       const prev = rejections[i - 1];
       const curr = rejections[i];
-
-      // Check if highs are within 0.5% of each other
       const priceDiff = Math.abs(curr.high - prev.high) / prev.high;
 
       if (priceDiff < 0.005 && curr.index - prev.index < 20) {
-        this.patterns.push({
+        const pattern = {
           type: 'DOUBLE_REJECTION',
-          name: 'Double Rejection (二次拒绝)',
+          name: 'Double Top Rejection',
           signal: 'PUT',
           strength: 'VERY_HIGH',
           index: curr.index,
           price: curr.high,
-          description: '价格在相近水平被两次拒绝，强烈做空信号',
+          description: 'Price rejected twice at similar level - strong bearish',
           stopLoss: Math.max(prev.high, curr.high) * 1.002,
           entry: curr.close
-        });
+        };
+        this.patterns.push(pattern);
+        this.putPatterns.push(pattern);
       }
     }
   }
 
   /**
-   * Detect price stalling at highs (价格在高位出现停滞)
-   * Consolidation near highs before breakdown
+   * Detect price stalling at highs (bearish)
    */
-  detectPriceStalling(candles) {
+  detectPriceStallingHigh(candles) {
     for (let i = this.config.consolidationBars; i < candles.length; i++) {
       const recentCandles = candles.slice(i - this.config.consolidationBars, i + 1);
       const highs = recentCandles.map(c => c.high);
@@ -234,33 +236,241 @@ class PutPatternDetector {
       const lowestLow = Math.min(...lows);
       const avgClose = recentCandles.reduce((sum, c) => sum + c.close, 0) / recentCandles.length;
 
-      // Calculate range as percentage
       const rangePercent = (highestHigh - lowestLow) / avgClose;
-
-      // Check if we're near recent highs and consolidating
       const lookback = Math.min(50, candles.length);
       const recentHighest = Math.max(...candles.slice(Math.max(0, i - lookback), i).map(c => c.high));
 
-      // If range is tight (<1%) and near recent highs
       if (rangePercent < 0.01 && highestHigh > recentHighest * 0.995) {
-        this.patterns.push({
+        const pattern = {
           type: 'PRICE_STALLING',
-          name: 'Price Stalling (高位停滞)',
+          name: 'Stalling at High',
           signal: 'PUT',
           strength: 'MEDIUM',
           index: i,
           price: candles[i].close,
-          description: '价格在高位出现停滞，可能即将下跌',
+          description: 'Price stalling at highs - may reverse down',
           stopLoss: highestHigh * 1.003,
           entry: lowestLow
-        });
+        };
+        this.patterns.push(pattern);
+        this.putPatterns.push(pattern);
+      }
+    }
+  }
+
+  // ==================== CALL PATTERNS ====================
+
+  /**
+   * Detect Higher Low pattern (bullish)
+   */
+  detectHigherLow(candles) {
+    const swingLows = this.findSwingLows(candles, 5);
+
+    for (let i = 1; i < swingLows.length; i++) {
+      const prevLow = swingLows[i - 1];
+      const currLow = swingLows[i];
+
+      if (currLow.low > prevLow.low * (1 + this.config.higherLowTolerance)) {
+        const pattern = {
+          type: 'HIGHER_LOW',
+          name: 'Higher Low',
+          signal: 'CALL',
+          strength: 'MEDIUM',
+          index: currLow.index,
+          price: currLow.low,
+          description: 'Price forms higher low - strengthening upward momentum',
+          stopLoss: prevLow.low,
+          entry: currLow.close
+        };
+        this.patterns.push(pattern);
+        this.callPatterns.push(pattern);
       }
     }
   }
 
   /**
-   * Find swing highs in candle data
+   * Detect rejection at support zones (bullish)
    */
+  detectRejectionAtSupport(candles) {
+    const supportLevels = this.findSupportLevels(candles);
+
+    for (let i = 5; i < candles.length; i++) {
+      const candle = candles[i];
+      const lowerWick = Math.min(candle.open, candle.close) - candle.low;
+      const totalRange = candle.high - candle.low;
+
+      if (totalRange === 0) continue;
+
+      const wickRatio = lowerWick / totalRange;
+
+      for (const support of supportLevels) {
+        if (candle.low <= support * 1.002 &&
+            candle.low >= support * 0.998 &&
+            wickRatio > 0.6) {
+          const pattern = {
+            type: 'REJECTION_AT_SUPPORT',
+            name: 'Rejection at Support',
+            signal: 'CALL',
+            strength: 'HIGH',
+            index: i,
+            price: candle.low,
+            description: 'Price rejected at support level - bullish bounce',
+            stopLoss: candle.low * 0.998,
+            entry: candle.close
+          };
+          this.patterns.push(pattern);
+          this.callPatterns.push(pattern);
+        }
+      }
+    }
+  }
+
+  /**
+   * Detect false breakout downward (bullish)
+   */
+  detectFalseBreakoutDown(candles) {
+    const supportLevels = this.findSupportLevels(candles);
+
+    for (let i = 5; i < candles.length - 1; i++) {
+      const candle = candles[i];
+      const nextCandle = candles[i + 1];
+
+      for (const support of supportLevels) {
+        if (candle.low < support * 0.998) {
+          if (candle.close > support ||
+              (nextCandle && nextCandle.close > nextCandle.open &&
+               nextCandle.close > support)) {
+            const pattern = {
+              type: 'FALSE_BREAKOUT_DOWN',
+              name: 'False Breakout Down',
+              signal: 'CALL',
+              strength: 'HIGH',
+              index: i,
+              price: candle.low,
+              description: 'Failed downward breakout - price reverses up',
+              stopLoss: candle.low * 0.997,
+              entry: nextCandle ? nextCandle.open : candle.close
+            };
+            this.patterns.push(pattern);
+            this.callPatterns.push(pattern);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Detect absorption buying pressure (bullish)
+   */
+  detectAbsorptionBuying(candles) {
+    for (let i = 3; i < candles.length; i++) {
+      const recentCandles = candles.slice(i - 3, i + 1);
+      let absorptionCount = 0;
+
+      for (const candle of recentCandles) {
+        const lowerWick = Math.min(candle.open, candle.close) - candle.low;
+        const totalRange = candle.high - candle.low;
+
+        if (totalRange > 0 && lowerWick / totalRange > 0.5) {
+          absorptionCount++;
+        }
+      }
+
+      if (absorptionCount >= 2) {
+        const candle = candles[i];
+        const pattern = {
+          type: 'ABSORPTION_BUYING',
+          name: 'Buying Absorption',
+          signal: 'CALL',
+          strength: 'MEDIUM',
+          index: i,
+          price: candle.low,
+          description: 'Multiple lower wicks show buying pressure',
+          stopLoss: Math.min(...recentCandles.map(c => c.low)) * 0.998,
+          entry: candle.close
+        };
+        this.patterns.push(pattern);
+        this.callPatterns.push(pattern);
+      }
+    }
+  }
+
+  /**
+   * Detect double rejection at bottom (bullish)
+   */
+  detectDoubleRejectionBottom(candles) {
+    const rejections = [];
+
+    for (let i = 2; i < candles.length; i++) {
+      const candle = candles[i];
+      const lowerWick = Math.min(candle.open, candle.close) - candle.low;
+      const totalRange = candle.high - candle.low;
+
+      if (totalRange > 0 && lowerWick / totalRange > 0.5) {
+        rejections.push({ index: i, low: candle.low, close: candle.close });
+      }
+    }
+
+    for (let i = 1; i < rejections.length; i++) {
+      const prev = rejections[i - 1];
+      const curr = rejections[i];
+      const priceDiff = Math.abs(curr.low - prev.low) / prev.low;
+
+      if (priceDiff < 0.005 && curr.index - prev.index < 20) {
+        const pattern = {
+          type: 'DOUBLE_REJECTION_BOTTOM',
+          name: 'Double Bottom Rejection',
+          signal: 'CALL',
+          strength: 'VERY_HIGH',
+          index: curr.index,
+          price: curr.low,
+          description: 'Price rejected twice at similar low - strong bullish',
+          stopLoss: Math.min(prev.low, curr.low) * 0.998,
+          entry: curr.close
+        };
+        this.patterns.push(pattern);
+        this.callPatterns.push(pattern);
+      }
+    }
+  }
+
+  /**
+   * Detect price stalling at lows (bullish)
+   */
+  detectPriceStallingLow(candles) {
+    for (let i = this.config.consolidationBars; i < candles.length; i++) {
+      const recentCandles = candles.slice(i - this.config.consolidationBars, i + 1);
+      const highs = recentCandles.map(c => c.high);
+      const lows = recentCandles.map(c => c.low);
+
+      const highestHigh = Math.max(...highs);
+      const lowestLow = Math.min(...lows);
+      const avgClose = recentCandles.reduce((sum, c) => sum + c.close, 0) / recentCandles.length;
+
+      const rangePercent = (highestHigh - lowestLow) / avgClose;
+      const lookback = Math.min(50, candles.length);
+      const recentLowest = Math.min(...candles.slice(Math.max(0, i - lookback), i).map(c => c.low));
+
+      if (rangePercent < 0.01 && lowestLow < recentLowest * 1.005) {
+        const pattern = {
+          type: 'PRICE_STALLING_LOW',
+          name: 'Stalling at Low',
+          signal: 'CALL',
+          strength: 'MEDIUM',
+          index: i,
+          price: candles[i].close,
+          description: 'Price stalling at lows - may reverse up',
+          stopLoss: lowestLow * 0.997,
+          entry: highestHigh
+        };
+        this.patterns.push(pattern);
+        this.callPatterns.push(pattern);
+      }
+    }
+  }
+
+  // ==================== HELPER FUNCTIONS ====================
+
   findSwingHighs(candles, lookback = 5) {
     const swingHighs = [];
 
@@ -288,20 +498,42 @@ class PutPatternDetector {
     return swingHighs;
   }
 
-  /**
-   * Find resistance levels from recent price action
-   */
+  findSwingLows(candles, lookback = 5) {
+    const swingLows = [];
+
+    for (let i = lookback; i < candles.length - lookback; i++) {
+      const candle = candles[i];
+      let isSwingLow = true;
+
+      for (let j = i - lookback; j <= i + lookback; j++) {
+        if (j !== i && candles[j].low <= candle.low) {
+          isSwingLow = false;
+          break;
+        }
+      }
+
+      if (isSwingLow) {
+        swingLows.push({
+          index: i,
+          low: candle.low,
+          close: candle.close,
+          time: candle.time
+        });
+      }
+    }
+
+    return swingLows;
+  }
+
   findResistanceLevels(candles) {
     const levels = [];
     const swingHighs = this.findSwingHighs(candles, 3);
 
-    // Cluster swing highs to find significant levels
     for (const sh of swingHighs) {
       let foundCluster = false;
 
       for (let i = 0; i < levels.length; i++) {
         if (Math.abs(sh.high - levels[i]) / levels[i] < 0.003) {
-          // Average with existing level
           levels[i] = (levels[i] + sh.high) / 2;
           foundCluster = true;
           break;
@@ -316,20 +548,42 @@ class PutPatternDetector {
     return levels;
   }
 
+  findSupportLevels(candles) {
+    const levels = [];
+    const swingLows = this.findSwingLows(candles, 3);
+
+    for (const sl of swingLows) {
+      let foundCluster = false;
+
+      for (let i = 0; i < levels.length; i++) {
+        if (Math.abs(sl.low - levels[i]) / levels[i] < 0.003) {
+          levels[i] = (levels[i] + sl.low) / 2;
+          foundCluster = true;
+          break;
+        }
+      }
+
+      if (!foundCluster) {
+        levels.push(sl.low);
+      }
+    }
+
+    return levels;
+  }
+
   /**
-   * Get overall PUT signal strength
-   * @returns {Object} Signal summary
+   * Get signal summary - determines PUT or CALL based on pattern weights
    */
   getSignalSummary() {
     if (this.patterns.length === 0) {
       return {
         signal: 'NONE',
         strength: 0,
-        patterns: []
+        patterns: [],
+        direction: 'NEUTRAL'
       };
     }
 
-    // Weight different pattern strengths
     const strengthWeights = {
       'VERY_HIGH': 4,
       'HIGH': 3,
@@ -337,34 +591,74 @@ class PutPatternDetector {
       'LOW': 1
     };
 
-    let totalWeight = 0;
-    for (const pattern of this.patterns) {
-      totalWeight += strengthWeights[pattern.strength] || 1;
+    // Calculate PUT weight
+    let putWeight = 0;
+    for (const pattern of this.putPatterns) {
+      putWeight += strengthWeights[pattern.strength] || 1;
     }
 
-    // Normalize to 0-100
-    const normalizedStrength = Math.min(100, (totalWeight / this.patterns.length) * 25);
+    // Calculate CALL weight
+    let callWeight = 0;
+    for (const pattern of this.callPatterns) {
+      callWeight += strengthWeights[pattern.strength] || 1;
+    }
+
+    // Determine direction based on weight difference
+    const totalWeight = putWeight + callWeight;
+    const netWeight = putWeight - callWeight;
+
+    let signal, direction;
+    if (Math.abs(netWeight) < 1) {
+      // Weights are roughly equal - no clear signal
+      signal = 'NEUTRAL';
+      direction = 'NEUTRAL';
+    } else if (netWeight > 0) {
+      // More PUT patterns
+      signal = putWeight > 6 ? 'STRONG_PUT' : 'PUT';
+      direction = 'PUT';
+    } else {
+      // More CALL patterns
+      signal = callWeight > 6 ? 'STRONG_CALL' : 'CALL';
+      direction = 'CALL';
+    }
+
+    // Calculate strength based on dominant direction
+    const dominantWeight = Math.max(putWeight, callWeight);
+    const patternCount = direction === 'PUT' ? this.putPatterns.length :
+                         direction === 'CALL' ? this.callPatterns.length :
+                         this.patterns.length;
+
+    // Strength is based on weight and how much it dominates the opposite direction
+    const dominanceRatio = totalWeight > 0 ? dominantWeight / totalWeight : 0;
+    const baseStrength = patternCount > 0 ? (dominantWeight / patternCount) * 25 : 0;
+    const normalizedStrength = Math.min(100, baseStrength * dominanceRatio * 2);
 
     return {
-      signal: normalizedStrength > 50 ? 'STRONG_PUT' : 'PUT',
+      signal: signal,
       strength: normalizedStrength,
       patterns: this.patterns,
-      recommendation: this.getRecommendation(normalizedStrength)
+      direction: direction,
+      putWeight: putWeight,
+      callWeight: callWeight,
+      recommendation: this.getRecommendation(normalizedStrength, direction)
     };
   }
 
-  /**
-   * Get trading recommendation
-   */
-  getRecommendation(strength) {
-    if (strength >= 75) {
-      return '强烈做空信号！建议立即考虑进场做空。';
-    } else if (strength >= 50) {
-      return '做空信号明确，可以考虑进场做空。';
-    } else if (strength >= 25) {
-      return '有做空迹象，建议继续观察确认。';
+  getRecommendation(strength, direction) {
+    if (direction === 'NEUTRAL') {
+      return 'No clear direction - wait for stronger signal.';
     }
-    return '信号较弱，建议等待更好的机会。';
+
+    const dirLabel = direction === 'PUT' ? 'short/PUT' : 'long/CALL';
+
+    if (strength >= 75) {
+      return `Strong ${dirLabel} signal! Consider entry.`;
+    } else if (strength >= 50) {
+      return `Clear ${dirLabel} signal - consider position.`;
+    } else if (strength >= 25) {
+      return `Weak ${dirLabel} signal - wait for confirmation.`;
+    }
+    return 'Signal too weak - continue monitoring.';
   }
 }
 

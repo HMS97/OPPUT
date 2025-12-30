@@ -11,11 +11,17 @@ const TF_CONFIG = {
 
 const PATTERN_ICONS = {
   'LOWER_HIGH': '📉',
+  'HIGHER_LOW': '📈',
   'REJECTION_AT_RESISTANCE': '🛑',
+  'REJECTION_AT_SUPPORT': '🟢',
   'FALSE_BREAKOUT': '💥',
+  'FALSE_BREAKOUT_DOWN': '💫',
   'ABSORPTION': '🔄',
+  'ABSORPTION_BUYING': '🔃',
   'DOUBLE_REJECTION': '⚡',
-  'PRICE_STALLING': '⏸️'
+  'DOUBLE_REJECTION_BOTTOM': '⚡',
+  'PRICE_STALLING': '⏸️',
+  'PRICE_STALLING_LOW': '⏸️'
 };
 
 class SPYDashboard {
@@ -55,9 +61,9 @@ class SPYDashboard {
 
   initDetectors() {
     const configs = {
-      low: { rejectionThreshold: 0.003, consolidationBars: 5, lowerHighTolerance: 0.0015 },
-      medium: { rejectionThreshold: 0.002, consolidationBars: 3, lowerHighTolerance: 0.001 },
-      high: { rejectionThreshold: 0.001, consolidationBars: 2, lowerHighTolerance: 0.0005 }
+      low: { rejectionThreshold: 0.003, consolidationBars: 5, lowerHighTolerance: 0.0015, higherLowTolerance: 0.0015 },
+      medium: { rejectionThreshold: 0.002, consolidationBars: 3, lowerHighTolerance: 0.001, higherLowTolerance: 0.001 },
+      high: { rejectionThreshold: 0.001, consolidationBars: 2, lowerHighTolerance: 0.0005, higherLowTolerance: 0.0005 }
     };
 
     const baseConfig = configs[this.sensitivity];
@@ -67,9 +73,10 @@ class SPYDashboard {
       this.detectors[tf] = new PutPatternDetector({
         ...baseConfig,
         rejectionThreshold: baseConfig.rejectionThreshold * tfMultiplier,
-        lowerHighTolerance: baseConfig.lowerHighTolerance * tfMultiplier
+        lowerHighTolerance: baseConfig.lowerHighTolerance * tfMultiplier,
+        higherLowTolerance: baseConfig.higherLowTolerance * tfMultiplier
       });
-      this.signals[tf] = { strength: 0, patterns: [] };
+      this.signals[tf] = { strength: 0, patterns: [], direction: 'NEUTRAL' };
       this.patterns[tf] = [];
     }
   }
@@ -394,19 +401,32 @@ class SPYDashboard {
   }
 
   calculateCombinedSignal() {
-    let totalStrength = 0;
-    let maxStrength = 0;
+    let putWeight = 0;
+    let callWeight = 0;
     let activeTimeframes = [];
 
     for (const tf of this.timeframes) {
       const signal = this.signals[tf];
       if (signal.strength > 0) {
-        totalStrength += signal.strength;
         activeTimeframes.push(tf);
-        if (signal.strength > maxStrength) {
-          maxStrength = signal.strength;
+        if (signal.direction === 'PUT') {
+          putWeight += signal.putWeight || signal.strength;
+        } else if (signal.direction === 'CALL') {
+          callWeight += signal.callWeight || signal.strength;
         }
       }
+    }
+
+    // Determine overall direction
+    let direction = 'NEUTRAL';
+    let dominantWeight = 0;
+
+    if (putWeight > callWeight + 2) {
+      direction = 'PUT';
+      dominantWeight = putWeight;
+    } else if (callWeight > putWeight + 2) {
+      direction = 'CALL';
+      dominantWeight = callWeight;
     }
 
     // Confluence bonus
@@ -415,14 +435,18 @@ class SPYDashboard {
     else if (activeTimeframes.length === 3) confluenceBonus = 15;
     else if (activeTimeframes.length === 2) confluenceBonus = 10;
 
-    // Combined strength: average of active + bonus, capped at 100
-    const avgStrength = activeTimeframes.length > 0 ? totalStrength / activeTimeframes.length : 0;
-    const combinedStrength = Math.min(100, avgStrength + confluenceBonus);
+    // Calculate combined strength based on dominance
+    const totalWeight = putWeight + callWeight;
+    const dominanceRatio = totalWeight > 0 ? dominantWeight / totalWeight : 0;
+    const baseStrength = dominantWeight > 0 ? Math.min(75, dominantWeight * 5) : 0;
+    const combinedStrength = Math.min(100, baseStrength * dominanceRatio + confluenceBonus);
 
     return {
-      strength: combinedStrength,
+      strength: direction === 'NEUTRAL' ? 0 : combinedStrength,
+      direction,
       activeTimeframes,
-      maxStrength,
+      putWeight,
+      callWeight,
       confluenceBonus
     };
   }
@@ -440,17 +464,22 @@ class SPYDashboard {
       return;
     }
 
-    // Update card state
-    card.classList.toggle('has-signal', signal.strength >= 50);
+    // Update card state with direction-aware classes
+    card.classList.remove('has-signal', 'has-put', 'has-call');
+    if (signal.strength >= 50) {
+      card.classList.add('has-signal');
+      if (signal.direction === 'PUT') card.classList.add('has-put');
+      if (signal.direction === 'CALL') card.classList.add('has-call');
+    }
 
-    // Update badge
+    // Update badge with direction
     badge.className = 'tf-signal-badge';
     if (signal.strength >= 75) {
-      badge.classList.add('badge-strong');
-      badge.textContent = `${Math.round(signal.strength)}%`;
+      badge.classList.add(signal.direction === 'CALL' ? 'badge-strong-call' : 'badge-strong');
+      badge.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
     } else if (signal.strength >= 50) {
-      badge.classList.add('badge-medium');
-      badge.textContent = `${Math.round(signal.strength)}%`;
+      badge.classList.add(signal.direction === 'CALL' ? 'badge-medium-call' : 'badge-medium');
+      badge.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
     } else if (signal.strength > 0) {
       badge.classList.add('badge-weak');
       badge.textContent = `${Math.round(signal.strength)}%`;
@@ -459,15 +488,22 @@ class SPYDashboard {
       badge.textContent = '--';
     }
 
-    // Update meter
+    // Update meter color based on direction
     meter.style.width = `${signal.strength}%`;
+    if (signal.direction === 'CALL') {
+      meter.style.background = 'linear-gradient(90deg, #22c55e, #4ade80)';
+    } else if (signal.direction === 'PUT') {
+      meter.style.background = 'linear-gradient(90deg, #e94560, #ff6b6b)';
+    } else {
+      meter.style.background = 'linear-gradient(90deg, #666, #888)';
+    }
 
-    // Update patterns
+    // Update patterns with signal type
     if (patterns.length > 0) {
       patternsList.innerHTML = patterns.slice(0, 3).map(p => `
-        <div class="tf-pattern-item">
+        <div class="tf-pattern-item ${p.signal ? p.signal.toLowerCase() : ''}">
           <span class="tf-pattern-icon">${PATTERN_ICONS[p.type] || '📊'}</span>
-          <span>${p.name}</span>
+          <span>${p.name} (${p.signal || 'PUT'})</span>
         </div>
       `).join('');
     } else {
@@ -480,14 +516,34 @@ class SPYDashboard {
     const signalValueEl = document.getElementById('overallSignalValue');
     const meterEl = document.getElementById('overallMeter');
 
-    if (signalValueEl) signalValueEl.textContent = `${Math.round(signal.strength)}%`;
-    if (meterEl) meterEl.style.width = `${signal.strength}%`;
+    if (signalValueEl) {
+      signalValueEl.textContent = signal.direction === 'NEUTRAL' ?
+        'NEUTRAL' : `${signal.direction} ${Math.round(signal.strength)}%`;
+      signalValueEl.className = `signal-value ${signal.direction.toLowerCase()}`;
+    }
 
-    // Update confluence dots
+    if (meterEl) {
+      meterEl.style.width = `${signal.strength}%`;
+      if (signal.direction === 'CALL') {
+        meterEl.style.background = 'linear-gradient(90deg, #22c55e, #4ade80)';
+      } else if (signal.direction === 'PUT') {
+        meterEl.style.background = 'linear-gradient(90deg, #e94560, #ff6b6b)';
+      } else {
+        meterEl.style.background = 'linear-gradient(90deg, #666, #888)';
+      }
+    }
+
+    // Update confluence dots with direction color
     for (const tf of this.timeframes) {
       const tfId = TF_CONFIG[tf].id;
       const dot = document.getElementById(`conf${tfId}`);
-      if (dot) dot.classList.toggle('active', signal.activeTimeframes.includes(tf));
+      if (dot) {
+        dot.classList.toggle('active', signal.activeTimeframes.includes(tf));
+        const tfSignal = this.signals[tf];
+        dot.classList.remove('put', 'call');
+        if (tfSignal.direction === 'PUT') dot.classList.add('put');
+        if (tfSignal.direction === 'CALL') dot.classList.add('call');
+      }
     }
 
     // Update status box
@@ -495,18 +551,31 @@ class SPYDashboard {
     if (!statusBox) return;
     statusBox.className = 'status-box';
 
-    if (signal.strength >= 75) {
-      statusBox.classList.add('status-strong');
-      statusBox.textContent = '🔻 STRONG PUT!';
-    } else if (signal.strength >= 50) {
-      statusBox.classList.add('status-medium');
-      statusBox.textContent = '⚠️ PUT Signal';
-    } else if (signal.strength > 0) {
-      statusBox.classList.add('status-weak');
-      statusBox.textContent = 'Weak Signal';
-    } else {
+    if (signal.direction === 'NEUTRAL') {
       statusBox.classList.add('status-none');
       statusBox.textContent = 'Monitoring...';
+    } else if (signal.direction === 'PUT') {
+      if (signal.strength >= 75) {
+        statusBox.classList.add('status-strong');
+        statusBox.textContent = '🔻 STRONG PUT!';
+      } else if (signal.strength >= 50) {
+        statusBox.classList.add('status-medium');
+        statusBox.textContent = '⚠️ PUT Signal';
+      } else {
+        statusBox.classList.add('status-weak');
+        statusBox.textContent = 'Weak PUT';
+      }
+    } else if (signal.direction === 'CALL') {
+      if (signal.strength >= 75) {
+        statusBox.classList.add('status-strong-call');
+        statusBox.textContent = '🔺 STRONG CALL!';
+      } else if (signal.strength >= 50) {
+        statusBox.classList.add('status-medium-call');
+        statusBox.textContent = '✅ CALL Signal';
+      } else {
+        statusBox.classList.add('status-weak');
+        statusBox.textContent = 'Weak CALL';
+      }
     }
 
     // Update target price if signal is strong enough
@@ -585,6 +654,7 @@ class SPYDashboard {
 
   updateAllPatternsList(patterns) {
     const container = document.getElementById('allPatternsList');
+    if (!container) return;
 
     if (patterns.length === 0) {
       container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;font-size:12px;">No patterns detected</p>';
@@ -595,13 +665,14 @@ class SPYDashboard {
     const sorted = [...patterns].sort((a, b) => b.timeframe - a.timeframe);
 
     container.innerHTML = sorted.slice(0, 8).map(p => `
-      <div class="pattern-item">
+      <div class="pattern-item ${p.signal ? p.signal.toLowerCase() : ''}">
         <span class="pattern-icon">${PATTERN_ICONS[p.type] || '📊'}</span>
         <div class="pattern-info">
           <div class="pattern-name">${p.name}</div>
           <div class="pattern-desc">${p.description}</div>
         </div>
         <span class="pattern-tf">${TF_CONFIG[p.timeframe].name}</span>
+        <span class="pattern-signal ${p.signal ? p.signal.toLowerCase() : ''}">${p.signal || 'PUT'}</span>
       </div>
     `).join('');
   }
@@ -922,6 +993,7 @@ class SPYDashboard {
     // Add to history
     this.alerts.unshift({
       time: new Date(),
+      direction: signal.direction,
       strength: signal.strength,
       timeframes: signal.activeTimeframes,
       patterns: patterns.slice(0, 3).map(p => p.name)
@@ -938,6 +1010,7 @@ class SPYDashboard {
 
   updateAlertHistory() {
     const container = document.getElementById('alertList');
+    if (!container) return;
 
     if (this.alerts.length === 0) {
       container.innerHTML = '<p style="color:#666;text-align:center;padding:20px;font-size:12px;">No alerts yet</p>';
@@ -945,9 +1018,9 @@ class SPYDashboard {
     }
 
     container.innerHTML = this.alerts.slice(0, 10).map(a => `
-      <div class="alert-item">
+      <div class="alert-item ${(a.direction || 'put').toLowerCase()}">
         <div class="alert-header">
-          <span class="alert-type">PUT ${Math.round(a.strength)}%</span>
+          <span class="alert-type ${(a.direction || 'put').toLowerCase()}">${a.direction || 'PUT'} ${Math.round(a.strength)}%</span>
           <span class="alert-time">${a.time.toLocaleTimeString()}</span>
         </div>
         <div class="alert-details">
@@ -963,16 +1036,20 @@ class SPYDashboard {
     const contentEl = document.getElementById('alertPopupContent');
     const strengthEl = document.getElementById('alertPopupStrength');
 
+    if (!popup || !tfsEl || !contentEl || !strengthEl) return;
+
     tfsEl.innerHTML = signal.activeTimeframes.map(tf =>
       `<span class="alert-popup-tf">${TF_CONFIG[tf].name}</span>`
     ).join('');
 
     contentEl.innerHTML = `
+      <p><strong>Direction:</strong> ${signal.direction}</p>
       <p><strong>Confluence:</strong> ${signal.activeTimeframes.length}/4 timeframes</p>
-      <p style="margin-top:8px;"><strong>Patterns:</strong> ${patterns.slice(0, 3).map(p => p.name).join(', ')}</p>
+      <p style="margin-top:8px;"><strong>Patterns:</strong> ${patterns.slice(0, 3).map(p => `${p.name} (${p.signal})`).join(', ')}</p>
     `;
 
-    strengthEl.textContent = `${Math.round(signal.strength)}%`;
+    strengthEl.textContent = `${signal.direction} ${Math.round(signal.strength)}%`;
+    strengthEl.className = signal.direction.toLowerCase();
 
     popup.classList.add('show');
     setTimeout(() => popup.classList.remove('show'), 10000);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SPY PUT Alert - Multi-Timeframe Dashboard</title>
+  <title>SPY Signal Alert - PUT/CALL Dashboard with Backtesting</title>
   <style>
     * {
       margin: 0;
@@ -104,7 +104,7 @@
       border-radius: 16px;
       padding: 20px 24px;
       display: grid;
-      grid-template-columns: auto 1fr auto auto;
+      grid-template-columns: auto 1fr auto;
       gap: 24px;
       align-items: center;
       border: 1px solid rgba(255,255,255,0.05);
@@ -184,70 +184,8 @@
     .status-weak { background: rgba(74,222,128,0.2); color: #4ade80; }
     .status-medium { background: rgba(245,158,11,0.2); color: #f59e0b; }
     .status-strong { background: rgba(233,69,96,0.3); color: #e94560; border: 1px solid #e94560; }
-
-    /* Replay Controls */
-    .replay-controls {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .replay-input {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
-      color: white;
-      padding: 6px 10px;
-      border-radius: 6px;
-      font-size: 12px;
-    }
-
-    .replay-input::-webkit-calendar-picker-indicator {
-      filter: invert(1);
-    }
-
-    .replay-go-btn {
-      background: linear-gradient(90deg, #e94560, #ff6b6b);
-      border: none;
-      color: white;
-      padding: 6px 16px;
-      border-radius: 6px;
-      font-size: 12px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    .replay-go-btn:hover {
-      opacity: 0.9;
-    }
-
-    /* Target Price Section */
-    .target-price-section {
-      text-align: center;
-      min-width: 140px;
-      padding: 12px 16px;
-      background: rgba(233,69,96,0.1);
-      border-radius: 12px;
-      border: 1px solid rgba(233,69,96,0.3);
-    }
-
-    .target-label {
-      font-size: 11px;
-      color: #999;
-      margin-bottom: 4px;
-      text-transform: uppercase;
-    }
-
-    .target-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: #e94560;
-    }
-
-    .target-info {
-      font-size: 12px;
-      color: #4ade80;
-      margin-top: 4px;
-    }
+    .status-medium-call { background: rgba(74,222,128,0.2); color: #4ade80; border: 1px solid #4ade80; }
+    .status-strong-call { background: rgba(74,222,128,0.3); color: #4ade80; border: 1px solid #4ade80; }
 
     /* Timeframe Grid */
     .timeframe-grid {
@@ -294,6 +232,8 @@
     .badge-weak { background: rgba(74,222,128,0.2); color: #4ade80; }
     .badge-medium { background: rgba(245,158,11,0.2); color: #f59e0b; }
     .badge-strong { background: rgba(233,69,96,0.2); color: #e94560; }
+    .badge-medium-call { background: rgba(74,222,128,0.2); color: #4ade80; }
+    .badge-strong-call { background: rgba(74,222,128,0.3); color: #4ade80; }
 
     .tf-meter {
       margin-bottom: 12px;
@@ -327,6 +267,15 @@
       margin-bottom: 6px;
       font-size: 11px;
       border-left: 2px solid #e94560;
+    }
+
+    .tf-pattern-item.call {
+      border-left-color: #4ade80;
+    }
+
+    .tf-card.has-call {
+      border-color: rgba(74,222,128,0.3);
+      box-shadow: 0 0 20px rgba(74,222,128,0.1);
     }
 
     .tf-pattern-icon {
@@ -425,6 +374,34 @@
       border-left: 3px solid #e94560;
     }
 
+    .pattern-item.call {
+      border-left-color: #4ade80;
+    }
+
+    .pattern-signal {
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .pattern-signal.put {
+      background: rgba(233,69,96,0.2);
+      color: #e94560;
+    }
+
+    .pattern-signal.call {
+      background: rgba(74,222,128,0.2);
+      color: #4ade80;
+    }
+
+    .confluence-dot.put { background: #e94560; }
+    .confluence-dot.call { background: #4ade80; }
+
+    .signal-value.put { color: #e94560; }
+    .signal-value.call { color: #4ade80; }
+    .signal-value.neutral { color: #999; }
+
     .pattern-icon {
       font-size: 18px;
     }
@@ -464,6 +441,15 @@
       border-left: 3px solid #e94560;
       border-radius: 0 8px 8px 0;
       margin-bottom: 8px;
+    }
+
+    .alert-item.call {
+      background: rgba(74,222,128,0.1);
+      border-left-color: #4ade80;
+    }
+
+    .alert-type.call {
+      color: #4ade80;
     }
 
     .alert-header {
@@ -691,6 +677,116 @@
       }
     }
 
+    /* Backtest Controls */
+    #backtestControls {
+      display: none;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .backtest-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .backtest-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #4ade80;
+    }
+
+    .backtest-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .backtest-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .backtest-btn.start {
+      background: linear-gradient(90deg, #4ade80, #22c55e);
+      color: white;
+    }
+
+    .backtest-btn.stop {
+      background: linear-gradient(90deg, #e94560, #ff6b6b);
+      color: white;
+    }
+
+    .backtest-btn.step {
+      background: rgba(255,255,255,0.1);
+      color: #999;
+    }
+
+    .backtest-btn:hover:not(:disabled) {
+      transform: scale(1.05);
+    }
+
+    .backtest-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .backtest-settings {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .backtest-setting {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .backtest-setting label {
+      font-size: 12px;
+      color: #999;
+    }
+
+    #backtestProgress {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    #backtestStats {
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .backtest-stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 12px;
+    }
+
+    .backtest-stat:last-child {
+      border-bottom: none;
+    }
+
+    .backtest-stat span {
+      color: #999;
+    }
+
+    .backtest-stat strong {
+      color: #eee;
+    }
+
     /* Scrollbar */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
@@ -699,15 +795,11 @@
 </head>
 <body>
   <header class="header">
-    <h1>SPY PUT Alert Dashboard</h1>
+    <h1>SPY Signal Dashboard (PUT/CALL)</h1>
     <div class="header-controls">
       <div class="data-toggle">
         <button class="data-toggle-btn active" id="realtimeBtn">🔴 Real-time</button>
         <button class="data-toggle-btn" id="replayBtn">⏪ Replay</button>
-      </div>
-      <div class="replay-controls" id="replayControls" style="display:none;">
-        <input type="datetime-local" id="replayDatetime" class="replay-input">
-        <button class="replay-go-btn" id="replayGoBtn">Go</button>
       </div>
       <div class="status-badge">
         <div class="status-dot" id="statusDot"></div>
@@ -717,6 +809,33 @@
   </header>
 
   <main class="main-container">
+    <!-- Backtest Controls (shown in replay mode) -->
+    <section id="backtestControls">
+      <div class="backtest-header">
+        <span class="backtest-title">Backtest Mode</span>
+        <div class="backtest-buttons">
+          <button class="backtest-btn start" id="backtestStart">Start</button>
+          <button class="backtest-btn stop" id="backtestStop" disabled>Stop</button>
+          <button class="backtest-btn step" id="backtestStep">Step</button>
+        </div>
+      </div>
+      <div class="backtest-settings">
+        <div class="backtest-setting">
+          <label>Market Phase:</label>
+          <select class="setting-select" id="marketPhase">
+            <option value="random">Random</option>
+            <option value="uptrend">Uptrend (CALL bias)</option>
+            <option value="downtrend">Downtrend (PUT bias)</option>
+            <option value="choppy">Choppy (Mixed)</option>
+          </select>
+        </div>
+      </div>
+      <div id="backtestProgress">Progress: 0%</div>
+      <div id="backtestStats">
+        <p>No signals recorded yet</p>
+      </div>
+    </section>
+
     <!-- Overall Combined Signal -->
     <section class="overall-signal">
       <div class="overall-price">
@@ -730,7 +849,7 @@
 
       <div class="overall-meter">
         <div class="overall-meter-label">
-          <span class="overall-meter-title">Combined PUT Signal</span>
+          <span class="overall-meter-title">Combined Signal</span>
           <span class="overall-meter-value" id="overallSignalValue">0%</span>
         </div>
         <div class="meter-bar">
@@ -748,14 +867,6 @@
       <div class="overall-status">
         <div class="status-box status-none" id="overallStatus">
           Monitoring...
-        </div>
-      </div>
-
-      <div class="target-price-section" id="targetPriceSection" style="display:none;">
-        <div class="target-label">PUT Target</div>
-        <div class="target-value" id="targetPrice">---.--</div>
-        <div class="target-info">
-          <span id="targetDistance">--.-%</span> from entry
         </div>
       </div>
     </section>
@@ -839,7 +950,6 @@
         </div>
         <div class="chart-container" id="chartContainer">
           <div id="tradingview_chart" style="height:100%"></div>
-          <div id="replay_chart" style="height:100%;display:none;"></div>
         </div>
       </div>
 
@@ -908,8 +1018,6 @@
 
   <!-- TradingView -->
   <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-  <!-- Lightweight Charts for Replay Mode -->
-  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
   <!-- Pattern Detection -->
   <script src="patterns.js"></script>
   <!-- App -->
