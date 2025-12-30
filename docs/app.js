@@ -758,12 +758,22 @@ class SPYDashboard {
       throw new Error('Missing price data');
     }
 
+    // Get the cutoff time for replay mode
+    const cutoffTime = this.replayDatetime ? this.replayDatetime.getTime() : null;
+
     // Convert to candle format
     const candles = [];
     for (let i = 0; i < timestamps.length; i++) {
+      const candleTime = timestamps[i] * 1000;
+
+      // In replay mode, only include candles up to the selected datetime
+      if (cutoffTime && candleTime > cutoffTime) {
+        continue;
+      }
+
       if (quote.open[i] != null && quote.close[i] != null) {
         candles.push({
-          time: timestamps[i] * 1000,
+          time: candleTime,
           open: quote.open[i],
           high: quote.high[i],
           low: quote.low[i],
@@ -777,6 +787,9 @@ class SPYDashboard {
       const firstCandle = candles[0];
       const lastCandle = candles[candles.length - 1];
       console.log(`[SPY Dashboard] Fetched ${candles.length} candles for ${timeframe}m: ${new Date(firstCandle.time).toLocaleString()} to ${new Date(lastCandle.time).toLocaleString()}, last price: ${lastCandle.close.toFixed(2)}`);
+      if (cutoffTime) {
+        console.log(`[SPY Dashboard] Replay cutoff: ${new Date(cutoffTime).toLocaleString()}`);
+      }
     } else {
       console.log(`[SPY Dashboard] No candles returned for ${timeframe}m`);
     }
