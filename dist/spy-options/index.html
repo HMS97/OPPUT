@@ -4,15 +4,17 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SPY Options Dashboard</title>
-  <script type="module" crossorigin src="../assets/spy-options-t4hiQapf.js"></script>
-  <link rel="modulepreload" crossorigin href="../assets/yahoo-BuRmdVwI.js">
-  <link rel="stylesheet" crossorigin href="../assets/spy-options-CNp4wukz.css">
+  <script type="module" crossorigin src="../assets/spy-options-CwwG7hHA.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/yahoo-IGazJLE9.js">
+  <link rel="modulepreload" crossorigin href="../assets/dailySignal-CG5-jfZZ.js">
+  <link rel="stylesheet" crossorigin href="../assets/spy-options-DdnA3_jU.css">
 </head>
 <body>
   <header class="header">
     <h1>SPY Options Dashboard</h1>
     <div class="header-controls">
-      <a href="/dashboard/" class="nav-link">Signal Dashboard</a>
+      <a href="../backtest/" class="nav-link">Backtester</a>
+      <a href="../dashboard/" class="nav-link">Signal Dashboard</a>
       <div class="status-badge">
         <div class="status-dot" id="statusDot"></div>
         <span id="statusText">Loading...</span>
@@ -36,6 +38,81 @@
         </div>
         <div class="signal-recommendation" id="signalRecommendation">
           Analyzing price action...
+        </div>
+      </div>
+    </section>
+
+    <!-- OI Analysis Panel -->
+    <section class="oi-analysis-panel" id="oiPanel">
+      <div class="oi-header">
+        <h2>OI Analysis</h2>
+        <div class="oi-badges">
+          <span class="vol-regime-badge" id="volRegimeBadge">--</span>
+          <span class="opex-badge" id="opexBadge">--</span>
+        </div>
+      </div>
+
+      <div class="oi-metrics-grid">
+        <div class="oi-metric">
+          <span class="oi-metric-label">Predicted Close (WASP)</span>
+          <span class="oi-metric-value" id="oiPredicted">--</span>
+          <span class="oi-metric-deviation" id="oiDeviation">--</span>
+        </div>
+        <div class="oi-metric">
+          <span class="oi-metric-label">Resistance (Call WASP)</span>
+          <span class="oi-metric-value resistance" id="oiResistance">--</span>
+        </div>
+        <div class="oi-metric">
+          <span class="oi-metric-label">Support (Put WASP)</span>
+          <span class="oi-metric-value support" id="oiSupport">--</span>
+        </div>
+        <div class="oi-metric">
+          <span class="oi-metric-label">Max Pain</span>
+          <span class="oi-metric-value" id="oiMaxPain">--</span>
+        </div>
+        <div class="oi-metric">
+          <span class="oi-metric-label">Net GEX</span>
+          <span class="oi-metric-value" id="oiGEX">--</span>
+        </div>
+        <div class="oi-metric">
+          <span class="oi-metric-label">Put/Call Ratio</span>
+          <span class="oi-metric-value" id="oiPCR">--</span>
+        </div>
+      </div>
+
+      <div class="oi-signal-box" id="oiSignalBox">
+        <div class="oi-signal-header">
+          <span class="oi-signal-label">OI Signal:</span>
+          <span class="oi-signal-value" id="oiSignal">NEUTRAL</span>
+        </div>
+        <div class="oi-strategy" id="oiStrategy">
+          Analyzing options flow...
+        </div>
+      </div>
+
+      <!-- Trade Conditions Checklist -->
+      <div class="trade-conditions" id="tradeConditions">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Trade Suggestions -->
+      <div class="trade-suggestions" id="tradeSuggestions">
+        <h3>Trade Suggestions</h3>
+        <div class="suggestions-grid" id="suggestionsGrid">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <div class="oi-chart-container">
+        <h3>OI Distribution by Strike</h3>
+        <div class="oi-chart" id="oiChart">
+          <!-- Chart rendered by JS -->
+        </div>
+        <div class="oi-chart-legend">
+          <span class="legend-item calls"><span class="legend-color"></span> Calls</span>
+          <span class="legend-item puts"><span class="legend-color"></span> Puts</span>
+          <span class="legend-item spot"><span class="legend-line"></span> Spot</span>
+          <span class="legend-item wasp"><span class="legend-line dashed"></span> WASP</span>
         </div>
       </div>
     </section>
@@ -66,6 +143,12 @@
             <span class="label">SPY:</span>
             <span class="value" id="spotPrice">---.--</span>
             <span class="change" id="priceChange">+0.00 (+0.00%)</span>
+          </div>
+          <div class="vix-display">
+            <span class="label">VIX:</span>
+            <span class="value" id="vixValue">--.-</span>
+            <span class="vix-change" id="vixChange">+0.00 (+0.0%)</span>
+            <span class="vix-badge" id="vixBadge">--</span>
           </div>
         </div>
         <div class="view-toggles">

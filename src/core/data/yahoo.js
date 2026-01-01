@@ -317,6 +317,59 @@ function parseYahooCandles(data, cutoffTime = null) {
 }
 
 /**
+ * Fetch VIX (Volatility Index) value
+ * @param {string} workerUrl - Optional Cloudflare Worker URL
+ * @returns {Promise<{vix: number, previousClose: number, change: number, changePercent: number}>}
+ */
+export async function fetchVIX(workerUrl = null) {
+  console.log('[Data] Fetching VIX')
+
+  const symbol = '^VIX'
+
+  // Try Cloudflare Worker first
+  if (workerUrl) {
+    try {
+      const response = await fetch(`${workerUrl}/quote/${encodeURIComponent(symbol)}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success) {
+          return {
+            vix: data.price,
+            previousClose: data.previousClose,
+            change: data.price - data.previousClose,
+            changePercent: ((data.price - data.previousClose) / data.previousClose) * 100,
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[Data] Worker VIX failed, trying proxies')
+    }
+  }
+
+  // Fallback to Yahoo Finance via CORS proxies
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=2d`
+  const data = await fetchWithProxy(url)
+
+  if (data?.chart?.result?.[0]) {
+    const result = data.chart.result[0]
+    const meta = result.meta
+    const quotes = result.indicators?.quote?.[0]
+
+    const currentVix = meta.regularMarketPrice
+    const previousClose = meta.previousClose || (quotes?.close ? quotes.close[quotes.close.length - 2] : currentVix)
+
+    return {
+      vix: currentVix,
+      previousClose,
+      change: currentVix - previousClose,
+      changePercent: ((currentVix - previousClose) / previousClose) * 100,
+    }
+  }
+
+  throw new Error('Failed to fetch VIX')
+}
+
+/**
  * Generate simulated SPY data for demo purposes
  * @param {number} timeframe - Timeframe in minutes
  * @returns {Array} Simulated candles

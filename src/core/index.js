@@ -21,6 +21,7 @@ export {
   fetchOptionExpiries,
   fetchOptionsChain,
   fetchCandleData,
+  fetchVIX,
   generateDemoData,
 } from './data/index.js'
 
@@ -39,3 +40,34 @@ export {
   formatTime,
   formatDateTime,
 } from './utils/index.js'
+
+// Options OI Analysis
+export {
+  calculateOIWASP,
+  calculateMaxPain,
+  calculateGEX,
+  calculateDeviation,
+  getOIDistribution,
+  checkMonthlyOpEx,
+  generateTradeSuggestions,
+  analyzeOptionsOI,
+  VIX_THRESHOLDS,
+  getVIXRegime,
+  checkTradeConditions,
+  DailySignalAnalyzer,
+  SIGNAL_TYPES,
+} from './options/index.js'
+
+// Backtest engine
+export {
+  BacktestEngine,
+  PatternDetectorSource,
+  DailySignalSource,
+  OISignalSource,
+  FixedBarsExit,
+  OppositeSignalExit,
+  TargetStopExit,
+  calculateStatistics,
+  monteCarloSimulation,
+  calculateEquityCurve,
+} from './backtest/index.js'

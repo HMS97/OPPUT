@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPY Options Backtester</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script type="module" crossorigin src="../assets/backtest-c-c2Pp9y.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/yahoo-IGazJLE9.js">
+  <link rel="modulepreload" crossorigin href="../assets/detector-CDfJOzPm.js">
+  <link rel="modulepreload" crossorigin href="../assets/dailySignal-CG5-jfZZ.js">
+  <link rel="stylesheet" crossorigin href="../assets/backtest-DIKfmTN0.css">
+</head>
+<body>
+  <header class="header">
+    <h1>SPY Options Backtester</h1>
+    <nav class="header-nav">
+      <a href="../spy-options/" class="nav-link">Options Dashboard</a>
+      <a href="../dashboard/" class="nav-link">Signal Dashboard</a>
+    </nav>
+  </header>
+
+  <main class="main-container">
+    <!-- Configuration Panel -->
+    <section class="config-panel glass-panel">
+      <div class="panel-header">
+        <h2>Backtest Configuration</h2>
+        <button class="btn-secondary btn-sm" id="resetConfig">Reset</button>
+      </div>
+
+      <div class="config-grid">
+        <!-- Signal Source -->
+        <div class="config-section">
+          <h3>Signal Source</h3>
+          <div class="signal-tabs">
+            <button class="tab-btn active" data-source="pattern">Pattern Detector</button>
+            <button class="tab-btn" data-source="daily">Daily Signal</button>
+            <button class="tab-btn" data-source="oi">OI-WASP</button>
+          </div>
+          <div id="sourceConfig" class="source-config">
+            <!-- Source-specific config rendered here -->
+          </div>
+        </div>
+
+        <!-- Date Range & Timeframe -->
+        <div class="config-section">
+          <h3>Data Range</h3>
+          <div class="date-inputs">
+            <div class="input-group">
+              <label>Timeframe</label>
+              <div class="timeframe-btns">
+                <button class="tf-btn" data-tf="5">5m</button>
+                <button class="tf-btn" data-tf="15">15m</button>
+                <button class="tf-btn active" data-tf="60">1H</button>
+                <button class="tf-btn" data-tf="240">4H</button>
+              </div>
+            </div>
+            <p class="data-limit-info" id="dataLimitInfo">1H candles: up to 3 months history</p>
+          </div>
+        </div>
+
+        <!-- Exit Strategy -->
+        <div class="config-section">
+          <h3>Exit Strategy</h3>
+          <select id="exitStrategy" class="select-input">
+            <option value="fixed-bars">Fixed Holding Period</option>
+            <option value="opposite-signal">Opposite Signal</option>
+            <option value="target-stop">Target / Stop Loss</option>
+          </select>
+          <div id="exitConfig" class="exit-config">
+            <!-- Exit-specific config rendered here -->
+          </div>
+        </div>
+
+        <!-- Signal Filters -->
+        <div class="config-section">
+          <h3>Signal Filters</h3>
+          <div class="filter-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="filterCALL" checked>
+              <span class="call-text">CALL</span>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="filterPUT" checked>
+              <span class="put-text">PUT</span>
+            </label>
+          </div>
+          <div class="input-group">
+            <label>Min Signal Strength</label>
+            <div class="range-container">
+              <input type="range" id="minStrength" min="0" max="100" value="30">
+              <span id="minStrengthValue">30%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="config-actions">
+        <button class="btn-primary" id="runBacktest">
+          <span class="btn-icon">▶</span>
+          Run Backtest
+        </button>
+        <div class="progress-container" id="progressContainer" style="display:none">
+          <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <span class="progress-text" id="progressText">0%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Results Panel -->
+    <section class="results-panel glass-panel" id="resultsPanel" style="display:none">
+      <div class="panel-header">
+        <h2>Backtest Results</h2>
+        <div class="results-meta">
+          <span id="resultsPeriod"></span>
+          <span id="resultsConfig"></span>
+        </div>
+      </div>
+
+      <!-- Stats Cards -->
+      <div class="stats-grid" id="statsGrid">
+        <!-- Dynamically populated -->
+      </div>
+
+      <!-- Charts Row -->
+      <div class="charts-section">
+        <div class="chart-container">
+          <h3>Equity Curve</h3>
+          <canvas id="equityChart"></canvas>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-container half">
+          <h3>P&L Distribution</h3>
+          <canvas id="pnlChart"></canvas>
+        </div>
+        <div class="chart-container half">
+          <h3>Win Rate by Signal</h3>
+          <canvas id="signalChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Monte Carlo -->
+      <div class="monte-carlo-section glass-panel-inner">
+        <div class="mc-header">
+          <h3>Monte Carlo Simulation</h3>
+          <button class="btn-secondary btn-sm" id="runMonteCarlo">Run 1000 Simulations</button>
+        </div>
+        <div id="monteCarloResults" class="mc-results">
+          <p class="mc-placeholder">Click to run Monte Carlo simulation for confidence intervals</p>
+        </div>
+      </div>
+
+      <!-- Trade Log -->
+      <div class="trade-log-section">
+        <div class="trade-log-header">
+          <h3>Trade Log</h3>
+          <div class="trade-log-controls">
+            <select id="tradeFilter" class="select-input select-sm">
+              <option value="all">All Trades</option>
+              <option value="wins">Winners</option>
+              <option value="losses">Losers</option>
+            </select>
+            <button class="btn-secondary btn-sm" id="exportCsv">Export CSV</button>
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="trades-table" id="tradesTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Entry Time</th>
+                <th>Signal</th>
+                <th>Strength</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th>P&L %</th>
+                <th>Bars</th>
+                <th>Exit Reason</th>
+              </tr>
+            </thead>
+            <tbody id="tradesTableBody">
+              <!-- Trades rendered here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empty State -->
+    <section class="empty-state glass-panel" id="emptyState">
+      <div class="empty-icon">📊</div>
+      <h3>Configure and Run Backtest</h3>
+      <p>Select a signal source, exit strategy, and filters above, then click Run Backtest to see results.</p>
+    </section>
+  </main>
+
+</body>
+</html>

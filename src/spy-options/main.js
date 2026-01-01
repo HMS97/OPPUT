@@ -8,8 +8,13 @@ import {
   fetchOptionExpiries,
   fetchOptionsChain,
   fetchCandleData,
+  fetchVIX,
   formatNumber,
-  PutPatternDetector,
+  DailySignalAnalyzer,
+  SIGNAL_TYPES,
+  analyzeOptionsOI,
+  checkMonthlyOpEx,
+  getVIXRegime,
 } from '@core'
 
 class SPYOptionsAnalyzer {
@@ -22,11 +27,22 @@ class SPYOptionsAnalyzer {
     this.workerUrl = null
     this.currentSignal = null
     this.signalStrength = 0
+    this.signalDetails = null
+    this.currentPosition = 'NONE' // Track current position: 'LONG', 'SHORT', or 'NONE'
     this.showGreeks = true
     this.showHeatmap = false
     this.callsData = []
     this.putsData = []
     this.selectedOption = null
+    this.oiAnalysis = null
+    this.vixData = null // VIX data for filtering
+
+    // Daily signal analyzer - produces 3-4 signals per day
+    this.signalAnalyzer = new DailySignalAnalyzer({
+      minConfluence: 60,        // Require 60% confluence
+      minIndicatorsAgreeing: 3, // At least 3 indicators must agree
+      cooldownHours: 4,         // 4 hour cooldown between same signals
+    })
 
     this.init()
   }
@@ -34,11 +50,48 @@ class SPYOptionsAnalyzer {
   async init() {
     console.log('[SPY Options Dashboard] Initializing...')
     this.bindEvents()
+    this.updateOpExBadge()
     await Promise.all([
       this.loadSpotPrice(),
       this.loadExpirations(),
       this.loadSignal(),
+      this.loadVIX(),
     ])
+  }
+
+  async loadVIX() {
+    try {
+      this.vixData = await fetchVIX(this.workerUrl)
+      console.log('[VIX Data]', this.vixData)
+      this.updateVIXDisplay()
+    } catch (e) {
+      console.error('[SPY Options] Failed to load VIX:', e)
+      this.vixData = null
+    }
+  }
+
+  updateVIXDisplay() {
+    const vixEl = document.getElementById('vixValue')
+    const vixBadge = document.getElementById('vixBadge')
+
+    if (this.vixData && vixEl) {
+      vixEl.textContent = this.vixData.vix.toFixed(2)
+
+      const regime = getVIXRegime(this.vixData.vix)
+      if (vixBadge) {
+        vixBadge.textContent = regime.regime
+        vixBadge.className = `vix-badge ${regime.regime.toLowerCase()}`
+        vixBadge.title = regime.description
+      }
+
+      // Color based on change
+      const changeEl = document.getElementById('vixChange')
+      if (changeEl) {
+        const isUp = this.vixData.change >= 0
+        changeEl.textContent = `${isUp ? '+' : ''}${this.vixData.change.toFixed(2)} (${isUp ? '+' : ''}${this.vixData.changePercent.toFixed(1)}%)`
+        changeEl.className = `vix-change ${isUp ? 'up' : 'down'}`
+      }
+    }
   }
 
   bindEvents() {
@@ -98,38 +151,55 @@ class SPYOptionsAnalyzer {
 
   async loadSignal() {
     try {
-      // Fetch 15-minute candles for signal detection
-      const candles = await fetchCandleData(this.symbol, 15)
+      // Fetch daily candles for primary signal (reduces noise)
+      const candles = await fetchCandleData(this.symbol, 60) // 1-hour candles for better daily context
 
       if (candles && candles.length > 0) {
-        const detector = new PutPatternDetector(candles, 'medium')
-        const analysis = detector.analyze()
+        // Use DailySignalAnalyzer for 3-4 signals per day
+        const signal = this.signalAnalyzer.analyze(candles, this.currentPosition)
+        const summary = this.signalAnalyzer.getSummary(signal)
 
-        this.currentSignal = analysis.overallSignal
-        this.signalStrength = Math.max(analysis.putStrength, analysis.callStrength)
+        this.currentSignal = summary.signal
+        this.signalStrength = summary.strength
+        this.signalDetails = signal
 
-        this.updateSignalDisplay(analysis)
+        this.updateSignalDisplay(summary, signal)
+        console.log('[Daily Signal]', summary.action, '-', summary.details)
       }
     } catch (e) {
       console.error('[SPY Options] Failed to load signal:', e)
-      this.updateSignalDisplay({ overallSignal: 'NEUTRAL', putStrength: 0, callStrength: 0 })
+      this.updateSignalDisplay(
+        { signal: 'NEUTRAL', action: 'Wait', strength: 0, details: 'Error loading signal' },
+        null
+      )
     }
   }
 
-  updateSignalDisplay(analysis) {
+  updateSignalDisplay(summary, signal = null) {
     const signalValue = document.getElementById('signalValue')
     const strengthFill = document.getElementById('strengthFill')
     const strengthText = document.getElementById('strengthText')
     const recommendation = document.getElementById('signalRecommendation')
 
+    // Display the action (OPEN_CALL, OPEN_PUT, CLOSE_CALL, CLOSE_PUT, or HOLD)
     if (signalValue) {
-      signalValue.textContent = analysis.overallSignal
-      signalValue.className = 'signal-value ' + analysis.overallSignal.toLowerCase()
+      const displayText = summary.action || summary.signal
+      signalValue.textContent = displayText
+
+      // Add appropriate class for styling
+      if (summary.signal === 'CALL') {
+        signalValue.className = 'signal-value call'
+      } else if (summary.signal === 'PUT') {
+        signalValue.className = 'signal-value put'
+      } else {
+        signalValue.className = 'signal-value neutral'
+      }
     }
 
-    const strength = Math.max(analysis.putStrength, analysis.callStrength)
+    const strength = summary.strength || 0
     if (strengthFill) {
       strengthFill.style.width = `${strength}%`
+      // High strength threshold is now 60% (confluence threshold)
       strengthFill.className = strength >= 60 ? 'strength-fill high' : 'strength-fill'
     }
 
@@ -138,13 +208,23 @@ class SPYOptionsAnalyzer {
     }
 
     if (recommendation) {
-      if (analysis.overallSignal === 'PUT') {
-        recommendation.textContent = `Bearish signal detected (${strength}% strength). Consider PUT options on pullbacks.`
-      } else if (analysis.overallSignal === 'CALL') {
-        recommendation.textContent = `Bullish signal detected (${strength}% strength). Consider CALL options on dips.`
-      } else {
-        recommendation.textContent = 'No clear directional signal. Wait for confirmation before entering.'
+      let recText = summary.details || 'Analyzing market conditions...'
+
+      // Add indicator details if available
+      if (summary.indicators && summary.indicators.length > 0) {
+        const indicatorNames = summary.indicators
+          .map(i => `${i.indicator}: ${i.reason || i.direction}`)
+          .slice(0, 3)
+          .join(', ')
+        recText += ` [${indicatorNames}]`
       }
+
+      // Add session context
+      if (signal && signal.session && signal.session !== 'CLOSED') {
+        recText += ` (${signal.session} session)`
+      }
+
+      recommendation.textContent = recText
     }
   }
 
@@ -261,6 +341,7 @@ class SPYOptionsAnalyzer {
       }
 
       this.renderTables()
+      this.runOIAnalysis()
     } catch (e) {
       console.error('[SPY Options] Failed to load options chain:', e)
       if (callsTable) callsTable.innerHTML = '<p class="error">Failed to load</p>'
@@ -577,6 +658,376 @@ class SPYOptionsAnalyzer {
     }).join('')
 
     document.getElementById('plScenarios').innerHTML = scenarioHtml
+  }
+
+  // OI Analysis Methods
+  updateOpExBadge() {
+    const opEx = checkMonthlyOpEx()
+    const badge = document.getElementById('opexBadge')
+
+    if (badge) {
+      if (opEx.isOpExWeek) {
+        badge.textContent = 'OPEX WEEK'
+        badge.className = 'opex-badge opex-week'
+      } else if (opEx.daysToOpEx <= 7) {
+        badge.textContent = `${opEx.daysToOpEx}d to OpEx`
+        badge.className = 'opex-badge'
+      } else {
+        badge.textContent = `OpEx ${opEx.opExDate.slice(5)}`
+        badge.className = 'opex-badge'
+      }
+    }
+  }
+
+  runOIAnalysis() {
+    if (!this.spotPrice || this.callsData.length === 0 || this.putsData.length === 0) {
+      console.log('[OI Analysis] Insufficient data')
+      return
+    }
+
+    try {
+      // Pass VIX data for filtering
+      this.oiAnalysis = analyzeOptionsOI(this.callsData, this.putsData, this.spotPrice, this.vixData)
+      console.log('[OI Analysis]', this.oiAnalysis.summary)
+      console.log('[Trade Conditions]', this.oiAnalysis.tradeConditions)
+      console.log('[Trade Suggestions]', this.oiAnalysis.suggestions)
+      this.updateOIPanel()
+      this.renderOIChart()
+      this.renderTradeSuggestions()
+      this.renderTradeConditions()
+    } catch (e) {
+      console.error('[OI Analysis] Error:', e)
+    }
+  }
+
+  renderTradeConditions() {
+    const container = document.getElementById('tradeConditions')
+    if (!container || !this.oiAnalysis?.tradeConditions) return
+
+    const { conditions, score, maxScore, tradeable, confidence } = this.oiAnalysis.tradeConditions
+
+    const conditionsHtml = conditions.map(c => {
+      const statusClass = c.met ? 'met' : (c.required ? 'not-met' : 'optional')
+      const icon = c.met ? 'check' : (c.required ? 'x' : 'minus')
+      return `
+        <div class="condition-item ${statusClass}">
+          <span class="condition-icon">${c.met ? '+' : (c.required ? '!' : '-')}</span>
+          <div class="condition-details">
+            <div class="condition-header">
+              <span class="condition-name">${c.name}</span>
+              <span class="condition-badge ${statusClass}">${c.current}</span>
+              <span class="condition-target">(target: ${c.target})</span>
+            </div>
+            <div class="condition-explanation">${c.explanation}</div>
+          </div>
+        </div>
+      `
+    }).join('')
+
+    const overallClass = tradeable ? 'tradeable' : 'not-tradeable'
+
+    container.innerHTML = `
+      <div class="conditions-header">
+        <h3>Trade Conditions</h3>
+        <div class="conditions-score">
+          <div class="score-bar">
+            <div class="score-fill" style="width: ${confidence}%"></div>
+          </div>
+          <span class="score-text">${score}/${maxScore} (${confidence}%)</span>
+        </div>
+        <span class="tradeable-badge ${overallClass}">${tradeable ? 'TRADEABLE' : 'WAIT'}</span>
+      </div>
+      <div class="conditions-list">
+        ${conditionsHtml}
+      </div>
+    `
+  }
+
+  updateOIPanel() {
+    if (!this.oiAnalysis) return
+
+    const { wasp, maxPain, gex, deviation, summary } = this.oiAnalysis
+
+    // Update metrics
+    const predicted = document.getElementById('oiPredicted')
+    const deviationEl = document.getElementById('oiDeviation')
+    const resistance = document.getElementById('oiResistance')
+    const support = document.getElementById('oiSupport')
+    const maxPainEl = document.getElementById('oiMaxPain')
+    const gexEl = document.getElementById('oiGEX')
+    const pcrEl = document.getElementById('oiPCR')
+
+    if (predicted) predicted.textContent = `$${summary.predictedClose.toFixed(2)}`
+
+    if (deviationEl) {
+      const dev = deviation.deviation.fromWASP
+      deviationEl.textContent = `${dev >= 0 ? '+' : ''}${dev.toFixed(2)}%`
+      deviationEl.className = `oi-metric-deviation ${dev >= 0 ? 'positive' : 'negative'}`
+    }
+
+    if (resistance) resistance.textContent = `$${summary.resistance.toFixed(2)}`
+    if (support) support.textContent = `$${summary.support.toFixed(2)}`
+    if (maxPainEl) maxPainEl.textContent = `$${summary.maxPain}`
+
+    if (gexEl) {
+      const gexValue = gex.netGEX
+      const gexFormatted = Math.abs(gexValue) >= 1e9
+        ? `${(gexValue / 1e9).toFixed(1)}B`
+        : Math.abs(gexValue) >= 1e6
+        ? `${(gexValue / 1e6).toFixed(1)}M`
+        : formatNumber(gexValue)
+      gexEl.textContent = gexFormatted
+    }
+
+    if (pcrEl) {
+      pcrEl.textContent = wasp.putCallRatio.toFixed(2)
+    }
+
+    // Update vol regime badge
+    const volBadge = document.getElementById('volRegimeBadge')
+    if (volBadge) {
+      volBadge.textContent = gex.volRegime === 'low_vol' ? 'LOW VOL' : 'HIGH VOL'
+      volBadge.className = `vol-regime-badge ${gex.volRegime.replace('_', '-')}`
+    }
+
+    // Update signal
+    const signalEl = document.getElementById('oiSignal')
+    const strategyEl = document.getElementById('oiStrategy')
+
+    if (signalEl) {
+      const signal = summary.signal
+      signalEl.textContent = signal.replace(/_/g, ' ')
+
+      if (signal.includes('BULLISH')) {
+        signalEl.className = 'oi-signal-value bullish'
+      } else if (signal.includes('BEARISH')) {
+        signalEl.className = 'oi-signal-value bearish'
+      } else {
+        signalEl.className = 'oi-signal-value'
+      }
+    }
+
+    if (strategyEl && summary.strategy) {
+      const s = summary.strategy
+      if (s.type === 'WAIT') {
+        strategyEl.innerHTML = s.reason
+      } else {
+        strategyEl.innerHTML = `
+          <strong>${s.type.replace(/_/g, ' ')}</strong> centered at <strong>$${s.center}</strong><br>
+          ${s.reason}
+        `
+      }
+    } else if (strategyEl) {
+      strategyEl.textContent = 'No significant deviation detected. Monitor for entry opportunities.'
+    }
+  }
+
+  renderOIChart() {
+    if (!this.oiAnalysis) return
+
+    const { distribution, wasp } = this.oiAnalysis
+    const chartContainer = document.getElementById('oiChart')
+
+    if (!chartContainer || distribution.length === 0) return
+
+    // Find max OI for scaling
+    const maxOI = Math.max(
+      ...distribution.map(d => Math.max(d.callOI, d.putOI))
+    )
+
+    if (maxOI === 0) {
+      chartContainer.innerHTML = '<p class="no-data">No OI data available</p>'
+      return
+    }
+
+    const chartHeight = 160
+
+    const barsHtml = distribution.map(d => {
+      const callHeight = (d.callOI / maxOI) * chartHeight
+      const putHeight = (d.putOI / maxOI) * chartHeight
+
+      const isSpot = Math.abs(d.strike - this.spotPrice) < 1
+      const isWasp = Math.abs(d.strike - wasp.allWASP) < 1
+
+      let groupClass = 'oi-bar-group'
+      if (isSpot) groupClass += ' spot'
+      if (isWasp) groupClass += ' wasp'
+
+      return `
+        <div class="${groupClass}" title="Strike: $${d.strike}\nCalls: ${formatNumber(d.callOI)}\nPuts: ${formatNumber(d.putOI)}">
+          <div class="oi-bars">
+            <div class="oi-bar call" style="height: ${callHeight}px;"></div>
+            <div class="oi-bar put" style="height: ${putHeight}px;"></div>
+          </div>
+          <span class="oi-bar-strike">${d.strike}</span>
+        </div>
+      `
+    }).join('')
+
+    chartContainer.innerHTML = barsHtml
+  }
+
+  renderTradeSuggestions() {
+    const container = document.getElementById('suggestionsGrid')
+    if (!container) return
+
+    const { suggestions, noSuggestionReasons } = this.oiAnalysis
+
+    if (!suggestions || suggestions.length === 0) {
+      // Show detailed reasons why no suggestions
+      const reasonsHtml = (noSuggestionReasons || []).map(r => {
+        const statusClass = r.status === 'NOT MET' ? 'not-met' : r.status === 'CAUTION' ? 'caution' : 'info'
+        return `
+          <div class="no-suggestion-reason ${statusClass}">
+            <div class="reason-header">
+              <span class="reason-condition">${r.condition}</span>
+              <span class="reason-status ${statusClass}">${r.status}</span>
+            </div>
+            <div class="reason-values">
+              <span>Current: <strong>${r.current}</strong></span>
+              ${r.required !== 'N/A' ? `<span>Required: <strong>${r.required}</strong></span>` : ''}
+            </div>
+            <div class="reason-explanation">${r.explanation}</div>
+          </div>
+        `
+      }).join('')
+
+      container.innerHTML = `
+        <div class="no-suggestions-detail">
+          <div class="no-suggestions-header">
+            <span class="waiting-icon">~</span>
+            <span>No Trade Signals - Here's Why:</span>
+          </div>
+          <div class="no-suggestions-reasons">
+            ${reasonsHtml || '<p>Analyzing market conditions...</p>'}
+          </div>
+          <div class="no-suggestions-tip">
+            <strong>Tip:</strong> The strategy works best when spot price deviates >1.5% from WASP in a LOW VOL (positive GEX) regime.
+            Monitor for price moves away from the predicted close.
+          </div>
+        </div>
+      `
+      return
+    }
+
+    const cardsHtml = suggestions.map(s => {
+      const typeClass = s.type.includes('CALL') ? 'call' : s.type.includes('PUT') ? 'put' : 'butterfly'
+      const typeDisplay = s.type.replace(/_/g, ' ')
+
+      // Format strikes display
+      let strikesDisplay
+      if (s.legs) {
+        // Multi-leg strategy
+        strikesDisplay = s.legs.map(leg =>
+          `<span class="${leg.action.toLowerCase()}">${leg.action} ${leg.strike} ${leg.type}</span>`
+        ).join('<span class="arrow">/</span>')
+      } else {
+        strikesDisplay = `$${s.strikes[0]}`
+      }
+
+      // Format entry price
+      const entryDisplay = typeof s.entry === 'number'
+        ? `$${s.entry.toFixed(2)}`
+        : s.entry
+
+      // Format max profit
+      const maxProfitDisplay = typeof s.maxProfit === 'number'
+        ? `+$${s.maxProfit.toFixed(0)}`
+        : s.maxProfit
+
+      // Format max loss
+      const maxLossDisplay = typeof s.maxLoss === 'number'
+        ? `-$${s.maxLoss.toFixed(0)}`
+        : s.maxLoss
+
+      // Format breakeven
+      const breakevenDisplay = typeof s.breakeven === 'number'
+        ? `$${s.breakeven.toFixed(2)}`
+        : s.breakeven
+
+      return `
+        <div class="suggestion-card ${typeClass}">
+          <div class="suggestion-header">
+            <span class="suggestion-type ${typeClass}">${typeDisplay}</span>
+            <span class="suggestion-confidence">Confidence: <span>${s.confidence}%</span></span>
+          </div>
+
+          ${s.legs ? `
+            <div class="suggestion-legs">
+              ${s.legs.map(leg => `
+                <div class="leg-item ${leg.action.toLowerCase()}">
+                  <span class="leg-action">${leg.action}</span>
+                  <span class="leg-qty">${leg.qty}x</span>
+                  <span class="leg-strike">$${leg.strike}</span>
+                  <span class="leg-type">${leg.type}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <div class="suggestion-strikes">
+              <span>$${s.strikes[0]}</span>
+              <span class="strike-label">${s.type}</span>
+            </div>
+          `}
+
+          <div class="suggestion-details">
+            <div class="detail-item">
+              <span class="detail-label">Entry</span>
+              <span class="detail-value">${entryDisplay}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">R:R</span>
+              <span class="detail-value">${s.riskReward}:1</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Max Profit</span>
+              <span class="detail-value profit">${maxProfitDisplay}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Max Loss</span>
+              <span class="detail-value loss">${maxLossDisplay}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Breakeven</span>
+              <span class="detail-value">${breakevenDisplay}</span>
+            </div>
+            ${s.delta ? `
+              <div class="detail-item">
+                <span class="detail-label">Delta</span>
+                <span class="detail-value">${s.delta.toFixed(2)}</span>
+              </div>
+            ` : ''}
+          </div>
+
+          <div class="suggestion-rationale">
+            ${s.rationale}
+          </div>
+
+          ${s.detailedReason ? `
+            <div class="suggestion-detailed">
+              <div class="detailed-toggle" onclick="this.parentElement.classList.toggle('expanded')">
+                <span>View Detailed Analysis</span>
+                <span class="toggle-icon">+</span>
+              </div>
+              <div class="detailed-content">
+                <div class="detailed-signal">${s.detailedReason.signal}</div>
+                <ul class="detailed-analysis">
+                  ${s.detailedReason.analysis.map(a => `<li>${a}</li>`).join('')}
+                </ul>
+                <div class="detailed-theory">
+                  <strong>Theory:</strong> ${s.detailedReason.theory}
+                </div>
+                <div class="detailed-risk">
+                  <strong>${s.detailedReason.risk}</strong>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `
+    }).join('')
+
+    container.innerHTML = cardsHtml
   }
 }
 

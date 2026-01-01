@@ -13,6 +13,7 @@ export default defineConfig({
         main: resolve(__dirname, 'src/index.html'),
         dashboard: resolve(__dirname, 'src/dashboard/index.html'),
         'spy-options': resolve(__dirname, 'src/spy-options/index.html'),
+        backtest: resolve(__dirname, 'src/backtest/index.html'),
       },
     },
   },
