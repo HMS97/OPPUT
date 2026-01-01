@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPY Signal Alert - PUT/CALL Dashboard with Backtesting</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="header">
+    <h1>SPY Signal Dashboard (PUT/CALL)</h1>
+    <div class="header-controls">
+      <a href="/spy-options/" class="nav-link">Options Analysis</a>
+      <div class="data-toggle">
+        <button class="data-toggle-btn active" id="realtimeBtn">Real-time</button>
+        <button class="data-toggle-btn" id="replayBtn">Replay</button>
+      </div>
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Live</span>
+      </div>
+      <div id="replayControls" style="display:none;align-items:center;gap:8px;">
+        <input type="datetime-local" id="replayDatetime" class="setting-select" style="padding:6px 10px;">
+        <button id="replayGoBtn" class="backtest-btn start" style="padding:6px 14px;font-size:12px;">Go</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- Overall Combined Signal -->
+    <section class="overall-signal">
+      <div class="overall-price">
+        <div class="price-label">SPY</div>
+        <div class="price-value price-up" id="currentPrice">---.--</div>
+        <div class="price-change">
+          <span id="priceChange">+0.00</span>
+          <span id="priceChangePercent">(+0.00%)</span>
+        </div>
+      </div>
+
+      <div class="overall-meter">
+        <div class="overall-meter-label">
+          <span class="overall-meter-title">Combined Signal</span>
+          <span class="overall-meter-value" id="overallSignalValue">0%</span>
+        </div>
+        <div class="meter-bar">
+          <div class="meter-fill" id="overallMeter" style="width: 0%"></div>
+        </div>
+        <div class="confluence-indicator">
+          <span class="confluence-label">Confluence:</span>
+          <div class="confluence-dot" id="conf5m" title="5m"></div>
+          <div class="confluence-dot" id="conf15m" title="15m"></div>
+          <div class="confluence-dot" id="conf1h" title="1H"></div>
+          <div class="confluence-dot" id="conf4h" title="4H"></div>
+        </div>
+      </div>
+
+      <div class="overall-status">
+        <div class="status-box status-none" id="overallStatus">Monitoring...</div>
+      </div>
+    </section>
+
+    <!-- Signal Analysis Detail Panel -->
+    <section class="signal-detail-panel" id="signalDetailPanel">
+      <div class="detail-header">
+        <h3>Signal Analysis</h3>
+        <span class="detail-timestamp" id="signalTimestamp">--</span>
+      </div>
+      <div class="detail-grid">
+        <div class="detail-card">
+          <div class="detail-card-title">Technical Indicators</div>
+          <div class="indicator-grid" id="indicatorValues">
+            <div class="indicator-item">
+              <span class="ind-label">RSI (14)</span>
+              <span class="ind-value" id="indRSI">--</span>
+              <span class="ind-status" id="indRSIStatus">--</span>
+            </div>
+            <div class="indicator-item">
+              <span class="ind-label">EMA 8/21</span>
+              <span class="ind-value" id="indEMA">--</span>
+              <span class="ind-status" id="indEMAStatus">--</span>
+            </div>
+            <div class="indicator-item">
+              <span class="ind-label">MACD</span>
+              <span class="ind-value" id="indMACD">--</span>
+              <span class="ind-status" id="indMACDStatus">--</span>
+            </div>
+            <div class="indicator-item">
+              <span class="ind-label">Bollinger</span>
+              <span class="ind-value" id="indBB">--</span>
+              <span class="ind-status" id="indBBStatus">--</span>
+            </div>
+          </div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-card-title">Why This Signal?</div>
+          <div class="signal-reasons" id="signalReasons">
+            <p class="no-signal">No active signal</p>
+          </div>
+        </div>
+        <div class="detail-card">
+          <div class="detail-card-title">Backtest Results</div>
+          <div class="backtest-stats" id="backtestResults">
+            <div class="stat-row"><span>Total Signals</span><strong id="btTotalSignals">0</strong></div>
+            <div class="stat-row"><span>Win Rate</span><strong id="btWinRate">--</strong></div>
+            <div class="stat-row"><span>Avg Profit</span><strong id="btAvgProfit">--</strong></div>
+            <div class="stat-row"><span>PUT Signals</span><strong id="btPutSignals">0</strong></div>
+            <div class="stat-row"><span>CALL Signals</span><strong id="btCallSignals">0</strong></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Timeframe Grid -->
+    <section class="timeframe-grid">
+      <div class="tf-card" id="card5m">
+        <div class="tf-card-header">
+          <span class="tf-name">5 Min</span>
+          <span class="tf-signal-badge badge-none" id="badge5m">--</span>
+        </div>
+        <div class="tf-meter"><div class="tf-meter-bar"><div class="tf-meter-fill" id="meter5m" style="width: 0%"></div></div></div>
+        <div class="tf-patterns" id="patterns5m"><div class="tf-no-pattern">No patterns</div></div>
+      </div>
+
+      <div class="tf-card" id="card15m">
+        <div class="tf-card-header">
+          <span class="tf-name">15 Min</span>
+          <span class="tf-signal-badge badge-none" id="badge15m">--</span>
+        </div>
+        <div class="tf-meter"><div class="tf-meter-bar"><div class="tf-meter-fill" id="meter15m" style="width: 0%"></div></div></div>
+        <div class="tf-patterns" id="patterns15m"><div class="tf-no-pattern">No patterns</div></div>
+      </div>
+
+      <div class="tf-card" id="card1h">
+        <div class="tf-card-header">
+          <span class="tf-name">1 Hour</span>
+          <span class="tf-signal-badge badge-none" id="badge1h">--</span>
+        </div>
+        <div class="tf-meter"><div class="tf-meter-bar"><div class="tf-meter-fill" id="meter1h" style="width: 0%"></div></div></div>
+        <div class="tf-patterns" id="patterns1h"><div class="tf-no-pattern">No patterns</div></div>
+      </div>
+
+      <div class="tf-card" id="card4h">
+        <div class="tf-card-header">
+          <span class="tf-name">4 Hour</span>
+          <span class="tf-signal-badge badge-none" id="badge4h">--</span>
+        </div>
+        <div class="tf-meter"><div class="tf-meter-bar"><div class="tf-meter-fill" id="meter4h" style="width: 0%"></div></div></div>
+        <div class="tf-patterns" id="patterns4h"><div class="tf-no-pattern">No patterns</div></div>
+      </div>
+    </section>
+
+    <!-- Bottom Section: Chart + Sidebar -->
+    <section class="bottom-section">
+      <div class="chart-section">
+        <div class="chart-tabs">
+          <button class="chart-tab active" data-tf="5">5m</button>
+          <button class="chart-tab" data-tf="15">15m</button>
+          <button class="chart-tab" data-tf="60">1H</button>
+          <button class="chart-tab" data-tf="240">4H</button>
+        </div>
+        <div class="chart-container" id="chartContainer">
+          <div id="tradingview_chart" style="height:100%;width:100%;"></div>
+          <div id="replay_chart" style="height:350px;width:100%;display:none;"></div>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="card">
+          <div class="card-title">All Detected Patterns</div>
+          <div class="combined-patterns" id="allPatternsList">
+            <p style="color:#666;text-align:center;padding:20px;font-size:12px;">No patterns detected</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Alert History</div>
+          <div class="alert-list" id="alertList">
+            <p style="color:#666;text-align:center;padding:20px;font-size:12px;">No alerts yet</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Settings</div>
+          <div class="settings-row">
+            <span class="setting-label">Sensitivity</span>
+            <select class="setting-select" id="sensitivity">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </div>
+          <div class="settings-row">
+            <span class="setting-label">Sound</span>
+            <label class="toggle-switch">
+              <input type="checkbox" id="soundToggle" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-row">
+            <span class="setting-label">Refresh</span>
+            <select class="setting-select" id="refreshInterval">
+              <option value="5">5s</option>
+              <option value="10" selected>10s</option>
+              <option value="30">30s</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Alert Popup -->
+  <div class="alert-popup" id="alertPopup">
+    <div class="alert-popup-header">
+      <span class="alert-popup-title">PUT SIGNAL!</span>
+      <button class="alert-popup-close" onclick="window.closeAlertPopup()">&times;</button>
+    </div>
+    <div class="alert-popup-tfs" id="alertPopupTFs"></div>
+    <div id="alertPopupContent" style="font-size:13px;margin-bottom:12px;"></div>
+    <div class="alert-popup-strength">
+      <span class="alert-popup-strength-value" id="alertPopupStrength">0%</span>
+      <span style="font-size:12px;color:#999;">Combined Strength</span>
+    </div>
+  </div>
+
+  <!-- TradingView -->
+  <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+  <!-- Lightweight Charts for Replay -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+  <!-- App Entry Point -->
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

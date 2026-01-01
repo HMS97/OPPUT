@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPY Options Dashboard</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="header">
+    <h1>SPY Options Dashboard</h1>
+    <div class="header-controls">
+      <a href="/dashboard/" class="nav-link">Signal Dashboard</a>
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Loading...</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- Signal Panel -->
+    <section class="signal-panel" id="signalPanel">
+      <div class="signal-content">
+        <div class="signal-direction" id="signalDirection">
+          <span class="signal-label">Signal:</span>
+          <span class="signal-value neutral" id="signalValue">ANALYZING...</span>
+        </div>
+        <div class="signal-strength">
+          <div class="strength-bar">
+            <div class="strength-fill" id="strengthFill"></div>
+          </div>
+          <span class="strength-text" id="strengthText">0%</span>
+        </div>
+        <div class="signal-recommendation" id="signalRecommendation">
+          Analyzing price action...
+        </div>
+      </div>
+    </section>
+
+    <!-- Options Section -->
+    <section class="options-section">
+      <div class="section-header">
+        <h2>Options Chain</h2>
+        <div class="header-actions">
+          <div class="quick-expiry">
+            <button class="expiry-btn" data-expiry="0dte">0DTE</button>
+            <button class="expiry-btn" data-expiry="1dte">1DTE</button>
+            <button class="expiry-btn" data-expiry="weekly">Weekly</button>
+            <button class="expiry-btn" data-expiry="monthly">Monthly</button>
+          </div>
+          <div class="expiry-select">
+            <label>Expiry:</label>
+            <select id="expirySelect" class="setting-select">
+              <option value="">Loading...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-row">
+        <div class="price-display">
+          <div class="spot-price">
+            <span class="label">SPY:</span>
+            <span class="value" id="spotPrice">---.--</span>
+            <span class="change" id="priceChange">+0.00 (+0.00%)</span>
+          </div>
+        </div>
+        <div class="view-toggles">
+          <label class="toggle-label">
+            <input type="checkbox" id="showGreeks" checked>
+            <span>Greeks</span>
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" id="showHeatmap">
+            <span>Heatmap</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="options-tables">
+        <div class="options-table calls">
+          <h3>Calls</h3>
+          <div id="callsTable" class="table-container">
+            <p class="loading">Loading options data...</p>
+          </div>
+        </div>
+        <div class="options-table puts">
+          <h3>Puts</h3>
+          <div id="putsTable" class="table-container">
+            <p class="loading">Loading options data...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- P&L Calculator Modal -->
+  <div class="modal-overlay" id="plModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>P&L Calculator</h3>
+        <button class="modal-close" id="closePlModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="pl-option-info">
+          <span class="pl-type" id="plType">CALL</span>
+          <span class="pl-strike" id="plStrike">$590</span>
+          <span class="pl-expiry" id="plExpiry">Jan 3</span>
+        </div>
+        <div class="pl-inputs">
+          <div class="input-group">
+            <label>Entry Price</label>
+            <input type="number" id="plEntry" step="0.01" value="1.50">
+          </div>
+          <div class="input-group">
+            <label>Contracts</label>
+            <input type="number" id="plContracts" value="1" min="1">
+          </div>
+        </div>
+        <div class="pl-summary">
+          <div class="pl-row">
+            <span>Max Risk:</span>
+            <span class="pl-value loss" id="plMaxRisk">-$150</span>
+          </div>
+          <div class="pl-row">
+            <span>Breakeven:</span>
+            <span class="pl-value" id="plBreakeven">$591.50</span>
+          </div>
+        </div>
+        <div class="pl-scenarios">
+          <h4>Profit Scenarios (at expiry)</h4>
+          <div class="scenario-grid" id="plScenarios">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

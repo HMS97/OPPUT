@@ -151,22 +151,93 @@ app.get('/api/status', (req, res) => {
 });
 
 // ============================================
-// Yahoo Finance Options API (no CORS issues)
+// Yahoo Finance Options API (with crumb auth)
 // ============================================
 
-// Helper to fetch from Yahoo Finance
+let yahooCrumb = null;
+let yahooCookies = null;
+let crumbExpiry = 0;
+
+// Get Yahoo Finance crumb for authentication
+async function getYahooCrumb() {
+  // Return cached crumb if still valid (cache for 30 min)
+  if (yahooCrumb && Date.now() < crumbExpiry) {
+    return { crumb: yahooCrumb, cookies: yahooCookies };
+  }
+
+  const https = require('https');
+
+  return new Promise((resolve, reject) => {
+    // First, get cookies from the consent page
+    const consentReq = https.get('https://fc.yahoo.com/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      }
+    }, (res) => {
+      const cookies = res.headers['set-cookie'] || [];
+      const cookieStr = cookies.map(c => c.split(';')[0]).join('; ');
+
+      // Now get crumb
+      const crumbReq = https.get('https://query2.finance.yahoo.com/v1/test/getcrumb', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Cookie': cookieStr,
+        }
+      }, (crumbRes) => {
+        let crumbData = '';
+        crumbRes.on('data', chunk => crumbData += chunk);
+        crumbRes.on('end', () => {
+          if (crumbData && crumbData.length < 50) {
+            yahooCrumb = crumbData;
+            yahooCookies = cookieStr;
+            crumbExpiry = Date.now() + 30 * 60 * 1000; // 30 min
+            console.log('[Server] Got Yahoo crumb:', crumbData.substring(0, 10) + '...');
+            resolve({ crumb: crumbData, cookies: cookieStr });
+          } else {
+            reject(new Error('Failed to get Yahoo crumb'));
+          }
+        });
+      });
+
+      crumbReq.on('error', reject);
+    });
+
+    consentReq.on('error', reject);
+  });
+}
+
+// Helper to fetch from Yahoo Finance with crumb
 async function fetchYahooFinance(url) {
   const https = require('https');
+
+  // Try with crumb first for options endpoints
+  let finalUrl = url;
+  let cookies = '';
+
+  if (url.includes('/v7/finance/options')) {
+    try {
+      const auth = await getYahooCrumb();
+      const separator = url.includes('?') ? '&' : '?';
+      finalUrl = `${url}${separator}crumb=${encodeURIComponent(auth.crumb)}`;
+      cookies = auth.cookies;
+    } catch (e) {
+      console.log('[Server] Could not get crumb, trying without:', e.message);
+    }
+  }
 
   return new Promise((resolve, reject) => {
     const options = {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
       }
     };
 
-    https.get(url, options, (res) => {
+    if (cookies) {
+      options.headers['Cookie'] = cookies;
+    }
+
+    https.get(finalUrl, options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
