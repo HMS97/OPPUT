@@ -32,6 +32,7 @@
             <button class="tab-btn active" data-source="pattern">Pattern Detector</button>
             <button class="tab-btn" data-source="daily">Daily Signal</button>
             <button class="tab-btn" data-source="oi">OI-WASP</button>
+            <button class="tab-btn" data-source="iv">IV Signal</button>
           </div>
           <div id="sourceConfig" class="source-config">
             <!-- Source-specific config rendered here -->
@@ -51,7 +52,17 @@
                 <button class="tf-btn" data-tf="240">4H</button>
               </div>
             </div>
-            <p class="data-limit-info" id="dataLimitInfo">1H candles: up to 3 months history</p>
+            <div class="date-range-row">
+              <div class="input-group">
+                <label>Start Date</label>
+                <input type="date" class="date-input" id="startDate">
+              </div>
+              <div class="input-group">
+                <label>End Date</label>
+                <input type="date" class="date-input" id="endDate">
+              </div>
+            </div>
+            <p class="data-limit-info" id="dataLimitInfo">1H candles: up to 3 months history (leave dates empty for max range)</p>
           </div>
         </div>
 
@@ -87,6 +98,14 @@
               <input type="range" id="minStrength" min="0" max="100" value="30">
               <span id="minStrengthValue">30%</span>
             </div>
+          </div>
+          <div class="input-group" style="margin-top: 12px;">
+            <label>Options Leverage Multiplier</label>
+            <div class="range-container">
+              <input type="range" id="leverageMultiplier" min="1" max="20" value="1">
+              <span id="leverageValue">1x (Stock)</span>
+            </div>
+            <p class="hint-text">Simulates options returns: 8x ≈ butterfly, 10-20x ≈ ATM options</p>
           </div>
         </div>
       </div>

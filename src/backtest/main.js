@@ -8,6 +8,7 @@ import {
   PatternDetectorSource,
   DailySignalSource,
   OISignalSource,
+  IVSignalSource,
   FixedBarsExit,
   OppositeSignalExit,
   TargetStopExit,
@@ -37,6 +38,14 @@ class BacktestApp {
       targetPercent: 1.0,
       stopPercent: 0.5,
       oppositeMinStrength: 50,
+      // Date range (null = use default range based on timeframe)
+      startDate: null,
+      endDate: null,
+      // IV-specific config
+      ivStrategy: 'percentile',
+      ivLookback: 20,
+      // Options leverage
+      leverageMultiplier: 1,
     }
 
     this.results = null
@@ -50,6 +59,132 @@ class BacktestApp {
     this.renderSourceConfig()
     this.renderExitConfig()
     this.updateDataLimitInfo()
+    this.initDateInputs()
+  }
+
+  applyOIWASPDefaults() {
+    // Optimized defaults for OI-WASP strategy (200%+ monthly target)
+    // 1. Timeframe: 15m
+    this.config.timeframe = 15
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'))
+    document.querySelector('.tf-btn[data-tf="15"]').classList.add('active')
+
+    // 2. Exit Strategy: Target/Stop Loss
+    this.config.exitStrategy = 'target-stop'
+    this.config.targetPercent = 1.5
+    this.config.stopPercent = 0.5
+    document.getElementById('exitStrategy').value = 'target-stop'
+    this.renderExitConfig()
+
+    // 3. Options Leverage: 8x (Butterfly)
+    this.config.leverageMultiplier = 8
+    document.getElementById('leverageMultiplier').value = 8
+    document.getElementById('leverageValue').textContent = '8x (Butterfly)'
+
+    // 4. Min Signal Strength: 20%
+    this.config.minStrength = 20
+    document.getElementById('minStrength').value = 20
+    document.getElementById('minStrengthValue').textContent = '20%'
+
+    // 5. OI-WASP specific settings
+    this.config.waspPeriod = 15
+    this.config.entryDeviation = 0.2
+
+    // Update date range for 15m timeframe
+    this.initDateInputs()
+    this.updateDataLimitInfo()
+  }
+
+  initDateInputs() {
+    const startInput = document.getElementById('startDate')
+    const endInput = document.getElementById('endDate')
+
+    // Set default range based on current timeframe
+    const limit = DATA_LIMITS[this.config.timeframe]
+    const endDate = new Date()
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - limit.days)
+
+    // Format as YYYY-MM-DD for date inputs
+    endInput.value = this.formatDateForInput(endDate)
+    startInput.value = this.formatDateForInput(startDate)
+
+    // Set max date to today
+    endInput.max = this.formatDateForInput(endDate)
+    startInput.max = this.formatDateForInput(endDate)
+  }
+
+  formatDateForInput(date) {
+    return date.toISOString().split('T')[0]
+  }
+
+  parseDateFromInput(value, endOfDay = false) {
+    if (!value) return null
+    // Create date in UTC to avoid timezone issues
+    const [year, month, day] = value.split('-').map(Number)
+    if (endOfDay) {
+      // Set to 23:59:59 UTC to include the full day
+      return new Date(Date.UTC(year, month - 1, day, 23, 59, 59))
+    }
+    return new Date(Date.UTC(year, month - 1, day))
+  }
+
+  validateDateRange() {
+    const startInput = document.getElementById('startDate')
+    const endInput = document.getElementById('endDate')
+    const infoEl = document.getElementById('dataLimitInfo')
+
+    const startDate = this.parseDateFromInput(startInput.value)
+    const endDate = this.parseDateFromInput(endInput.value)
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+
+    // Minimum days required per timeframe to get ~50 candles
+    const MIN_DAYS = {
+      5: 2,    // 5m: ~78 candles per trading day
+      15: 4,   // 15m: ~26 candles per trading day
+      60: 8,   // 1H: ~6.5 candles per trading day
+      240: 30, // 4H (daily): ~1 candle per day
+    }
+
+    if (startDate && endDate) {
+      // Check for future dates
+      if (endDate > today) {
+        infoEl.textContent = 'End date cannot be in the future'
+        infoEl.style.color = '#ef4444'
+        return false
+      }
+
+      if (startDate > today) {
+        infoEl.textContent = 'Start date cannot be in the future'
+        infoEl.style.color = '#ef4444'
+        return false
+      }
+
+      // Check start < end
+      if (startDate >= endDate) {
+        infoEl.textContent = 'Start date must be before end date'
+        infoEl.style.color = '#ef4444'
+        return false
+      }
+
+      const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24))
+      const minDays = MIN_DAYS[this.config.timeframe] || 8
+
+      // Check minimum range
+      if (daysDiff < minDays) {
+        infoEl.textContent = `Range too short: need at least ${minDays} days for ${this.getTimeframeLabel(this.config.timeframe)} timeframe`
+        infoEl.style.color = '#f59e0b' // warning color
+        return false
+      }
+
+      infoEl.textContent = `Custom range: ${daysDiff} days selected`
+      infoEl.style.color = '#22c55e' // success color
+      return true
+    }
+
+    this.updateDataLimitInfo()
+    return true
   }
 
   bindEvents() {
@@ -60,6 +195,11 @@ class BacktestApp {
         e.target.classList.add('active')
         this.config.source = e.target.dataset.source
         this.renderSourceConfig()
+
+        // Apply optimized defaults for OI-WASP
+        if (this.config.source === 'oi') {
+          this.applyOIWASPDefaults()
+        }
       })
     })
 
@@ -70,7 +210,19 @@ class BacktestApp {
         e.target.classList.add('active')
         this.config.timeframe = parseInt(e.target.dataset.tf)
         this.updateDataLimitInfo()
+        this.initDateInputs() // Reset dates to match new timeframe's default range
       })
+    })
+
+    // Date range inputs
+    document.getElementById('startDate').addEventListener('change', (e) => {
+      this.config.startDate = this.parseDateFromInput(e.target.value)
+      this.validateDateRange()
+    })
+
+    document.getElementById('endDate').addEventListener('change', (e) => {
+      this.config.endDate = this.parseDateFromInput(e.target.value)
+      this.validateDateRange()
     })
 
     // Exit strategy select
@@ -93,6 +245,17 @@ class BacktestApp {
     minStrengthSlider.addEventListener('input', (e) => {
       this.config.minStrength = parseInt(e.target.value)
       minStrengthValue.textContent = `${e.target.value}%`
+    })
+
+    // Leverage multiplier slider
+    const leverageSlider = document.getElementById('leverageMultiplier')
+    const leverageValue = document.getElementById('leverageValue')
+    leverageSlider.addEventListener('input', (e) => {
+      this.config.leverageMultiplier = parseInt(e.target.value)
+      const label = e.target.value === '1' ? '1x (Stock)' :
+                    e.target.value === '8' ? '8x (Butterfly)' :
+                    `${e.target.value}x (Options)`
+      leverageValue.textContent = label
     })
 
     // Run backtest button
@@ -130,8 +293,9 @@ class BacktestApp {
 
   updateDataLimitInfo() {
     const limit = DATA_LIMITS[this.config.timeframe]
-    document.getElementById('dataLimitInfo').textContent =
-      `${this.getTimeframeLabel(this.config.timeframe)} candles: up to ${limit.label} history`
+    const infoEl = document.getElementById('dataLimitInfo')
+    infoEl.textContent = `${this.getTimeframeLabel(this.config.timeframe)} candles: up to ${limit.label} history`
+    infoEl.style.color = '' // Reset color to default
   }
 
   getTimeframeLabel(tf) {
@@ -164,12 +328,30 @@ class BacktestApp {
         html = `
           <div class="input-group">
             <label>WASP Period (SMA)</label>
-            <input type="number" class="config-input" id="configWaspPeriod" value="20" min="10" max="50">
+            <input type="number" class="config-input" id="configWaspPeriod" value="${this.config.waspPeriod || 15}" min="5" max="50">
           </div>
           <div class="input-group">
             <label>Entry Deviation %</label>
-            <input type="number" class="config-input" id="configDeviation" value="1.5" min="0.5" max="5" step="0.1">
+            <input type="number" class="config-input" id="configDeviation" value="${this.config.entryDeviation || 0.2}" min="0.1" max="3" step="0.05">
           </div>
+          <p class="hint-text">Optimized: WASP=15, Dev=0.2%, 8x leverage for 200%+ monthly</p>
+        `
+        break
+      case 'iv':
+        html = `
+          <div class="input-group">
+            <label>Strategy</label>
+            <select class="select-input config-input" id="configIVStrategy">
+              <option value="percentile" selected>IV Percentile</option>
+              <option value="skew">IV Skew</option>
+              <option value="ivhv">IV vs HV</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Lookback Days</label>
+            <input type="number" class="config-input" id="configIVLookback" value="20" min="5" max="60">
+          </div>
+          <p class="data-source-info">Data: DoltHub (2019-present)</p>
         `
         break
     }
@@ -180,11 +362,13 @@ class BacktestApp {
     container.querySelectorAll('.config-input').forEach((input) => {
       input.addEventListener('change', (e) => {
         const id = e.target.id
-        const value = parseFloat(e.target.value)
+        const value = e.target.type === 'number' ? parseFloat(e.target.value) : e.target.value
         if (id === 'configLookback') this.config.lookback = value
         if (id === 'configMinScore') this.config.minScore = value
         if (id === 'configWaspPeriod') this.config.waspPeriod = value
         if (id === 'configDeviation') this.config.entryDeviation = value
+        if (id === 'configIVStrategy') this.config.ivStrategy = value
+        if (id === 'configIVLookback') this.config.ivLookback = value
       })
     })
   }
@@ -245,6 +429,11 @@ class BacktestApp {
     const progressFill = document.getElementById('progressFill')
     const progressText = document.getElementById('progressText')
 
+    // Validate date range
+    if (!this.validateDateRange()) {
+      return
+    }
+
     // Disable button and show progress
     runBtn.disabled = true
     progressContainer.style.display = 'flex'
@@ -255,11 +444,22 @@ class BacktestApp {
       progressFill.style.width = '10%'
       progressText.textContent = 'Fetching data...'
 
-      // Fetch candle data
-      const candles = await fetchCandleData('SPY', this.config.timeframe)
+      // Get date range from inputs
+      const startInput = document.getElementById('startDate')
+      const endInput = document.getElementById('endDate')
+      const startDate = this.parseDateFromInput(startInput.value)
+      const endDate = this.parseDateFromInput(endInput.value, true) // endOfDay=true to include full last day
 
-      if (!candles || candles.length < 50) {
-        throw new Error('Insufficient candle data received')
+      // Fetch candle data with custom date range
+      const candles = await fetchCandleData('SPY', this.config.timeframe, {
+        startDate,
+        endDate,
+      })
+
+      const minCandles = 50
+      if (!candles || candles.length < minCandles) {
+        const received = candles ? candles.length : 0
+        throw new Error(`Insufficient data: received ${received} candles, need at least ${minCandles}. Try expanding your date range.`)
       }
 
       progressFill.style.width = '30%'
@@ -270,6 +470,17 @@ class BacktestApp {
 
       // Create exit strategy
       const exitStrategy = this.createExitStrategy()
+
+      // Load DoltHub data for IV or OI signal sources
+      if (this.config.source === 'iv') {
+        progressFill.style.width = '35%'
+        progressText.textContent = 'Loading IV data from DoltHub...'
+        await signalSource.loadData('SPY', startDate, endDate)
+      } else if (this.config.source === 'oi') {
+        progressFill.style.width = '35%'
+        progressText.textContent = 'Loading OI WASP data from DoltHub...'
+        await signalSource.loadData('SPY', startDate, endDate)
+      }
 
       progressFill.style.width = '40%'
       progressText.textContent = 'Running backtest...'
@@ -298,8 +509,37 @@ class BacktestApp {
       progressFill.style.width = '95%'
       progressText.textContent = 'Calculating statistics...'
 
+      // Check if any trades were generated
+      if (results.trades.length === 0) {
+        const signalCount = results.signals ? results.signals.length : 0
+        let message = `No trades generated. `
+        if (signalCount === 0) {
+          message += `No signals found in ${results.candleCount} candles. `
+          if (this.config.source === 'oi') {
+            message += `Try lowering the Entry Deviation % or adjusting the timeframe.`
+          } else if (this.config.source === 'pattern') {
+            message += `Try lowering the Min Signal Strength filter.`
+          } else if (this.config.source === 'iv') {
+            message += `Try a different IV strategy or adjusting lookback days. Note: IV data requires dates from 2019+.`
+          } else {
+            message += `Try adjusting the signal filters or date range.`
+          }
+        } else {
+          message += `${signalCount} signals found but all filtered out. Try lowering the Min Signal Strength.`
+        }
+        throw new Error(message)
+      }
+
+      // Apply leverage multiplier to trades
+      const leveragedTrades = results.trades.map(trade => ({
+        ...trade,
+        pnlPercent: trade.pnlPercent * this.config.leverageMultiplier,
+        pnl: trade.pnl * this.config.leverageMultiplier,
+      }))
+      results.trades = leveragedTrades
+
       // Calculate statistics
-      const stats = calculateStatistics(results.trades, 10000)
+      const stats = calculateStatistics(leveragedTrades, 10000)
 
       progressFill.style.width = '100%'
       progressText.textContent = 'Complete!'
@@ -339,7 +579,13 @@ class BacktestApp {
         return new OISignalSource({
           ...commonConfig,
           waspPeriod: this.config.waspPeriod || 20,
-          entryDeviation: this.config.entryDeviation || 1.5,
+          entryDeviation: this.config.entryDeviation || 0.5,
+        })
+      case 'iv':
+        return new IVSignalSource({
+          ...commonConfig,
+          strategy: this.config.ivStrategy || 'percentile',
+          lookbackDays: this.config.ivLookback || 20,
         })
       default:
         return new PatternDetectorSource(commonConfig)

@@ -635,6 +635,47 @@ input[type="range"]::-webkit-slider-thumb {
   margin-top: 8px;
 }
 
+.data-source-info {
+  font-size: 11px;
+  color: var(--accent-purple);
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: var(--accent-purple-dim);
+  border-radius: var(--radius-sm);
+}
+
+/* Date Range Inputs */
+.date-range-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.date-range-row .input-group {
+  flex: 1;
+}
+
+.date-input {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.date-input:focus {
+  outline: none;
+  border-color: var(--accent-purple);
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+  cursor: pointer;
+}
+
 /* Results Meta */
 .results-meta {
   display: flex;
@@ -656,4 +697,12 @@ input[type="range"]::-webkit-slider-thumb {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+/* Hint text for inputs */
+.hint-text {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  line-height: 1.3;
 }
