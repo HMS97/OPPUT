@@ -5,11 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SPY Options Backtester</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" crossorigin src="../assets/backtest-c-c2Pp9y.js"></script>
-  <link rel="modulepreload" crossorigin href="../assets/yahoo-IGazJLE9.js">
-  <link rel="modulepreload" crossorigin href="../assets/detector-CDfJOzPm.js">
-  <link rel="modulepreload" crossorigin href="../assets/dailySignal-CG5-jfZZ.js">
-  <link rel="stylesheet" crossorigin href="../assets/backtest-DIKfmTN0.css">
+  <script type="module" crossorigin src="../assets/backtest-_uRA2t-n.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/indicators-B1kEv_-x.js">
+  <link rel="modulepreload" crossorigin href="../assets/yahoo-CRJUk5vV.js">
+  <link rel="modulepreload" crossorigin href="../assets/detector-CRHMCVSO.js">
+  <link rel="modulepreload" crossorigin href="../assets/dailySignal-iJV5XLls.js">
+  <link rel="modulepreload" crossorigin href="../assets/oi-adapter-CJGX5dQp.js">
+  <link rel="stylesheet" crossorigin href="../assets/backtest-BxuxPISW.css">
 </head>
 <body>
   <header class="header">
@@ -25,7 +27,11 @@
     <section class="config-panel glass-panel">
       <div class="panel-header">
         <h2>Backtest Configuration</h2>
-        <button class="btn-secondary btn-sm" id="resetConfig">Reset</button>
+        <div class="header-actions">
+          <button class="btn-accent btn-sm" id="apply200Preset" title="Apply 200%+ monthly returns preset">200% Preset</button>
+          <button class="btn-secondary btn-sm" id="clearCache" title="Clear cached data">Clear Cache</button>
+          <button class="btn-secondary btn-sm" id="resetConfig">Reset</button>
+        </div>
       </div>
 
       <div class="config-grid">
@@ -33,9 +39,12 @@
         <div class="config-section">
           <h3>Signal Source</h3>
           <div class="signal-tabs">
-            <button class="tab-btn active" data-source="pattern">Pattern Detector</button>
-            <button class="tab-btn" data-source="daily">Daily Signal</button>
-            <button class="tab-btn" data-source="oi">OI-WASP</button>
+            <button class="tab-btn active" data-source="pattern">Pattern</button>
+            <button class="tab-btn" data-source="daily">Daily</button>
+            <button class="tab-btn" data-source="oi">OI-Scalp</button>
+            <button class="tab-btn" data-source="oi-trend">OI-Trend</button>
+            <button class="tab-btn" data-source="oi-multi-tf">OI-MTF</button>
+            <button class="tab-btn" data-source="iv">IV</button>
           </div>
           <div id="sourceConfig" class="source-config">
             <!-- Source-specific config rendered here -->
@@ -55,7 +64,17 @@
                 <button class="tf-btn" data-tf="240">4H</button>
               </div>
             </div>
-            <p class="data-limit-info" id="dataLimitInfo">1H candles: up to 3 months history</p>
+            <div class="date-range-row">
+              <div class="input-group">
+                <label>Start Date</label>
+                <input type="date" class="date-input" id="startDate">
+              </div>
+              <div class="input-group">
+                <label>End Date</label>
+                <input type="date" class="date-input" id="endDate">
+              </div>
+            </div>
+            <p class="data-limit-info" id="dataLimitInfo">1H candles: up to 3 months history (leave dates empty for max range)</p>
           </div>
         </div>
 
@@ -66,6 +85,7 @@
             <option value="fixed-bars">Fixed Holding Period</option>
             <option value="opposite-signal">Opposite Signal</option>
             <option value="target-stop">Target / Stop Loss</option>
+            <option value="butterfly">Butterfly Spread (8:1 R:R)</option>
           </select>
           <div id="exitConfig" class="exit-config">
             <!-- Exit-specific config rendered here -->
@@ -91,6 +111,14 @@
               <input type="range" id="minStrength" min="0" max="100" value="30">
               <span id="minStrengthValue">30%</span>
             </div>
+          </div>
+          <div class="input-group" style="margin-top: 12px;">
+            <label>Options Leverage Multiplier</label>
+            <div class="range-container">
+              <input type="range" id="leverageMultiplier" min="1" max="8" value="1">
+              <span id="leverageValue">1x (Stock)</span>
+            </div>
+            <p class="hint-text">Simulates options returns: 5x ≈ ATM puts, 8x ≈ butterfly spread</p>
           </div>
         </div>
       </div>
@@ -173,10 +201,14 @@
               <tr>
                 <th>#</th>
                 <th>Entry Time</th>
-                <th>Signal</th>
+                <th>Exit Time</th>
+                <th>Type</th>
+                <th>Strike</th>
+                <th>Expiry</th>
+                <th>Qty</th>
                 <th>Strength</th>
-                <th>Entry</th>
-                <th>Exit</th>
+                <th>Entry $</th>
+                <th>Exit $</th>
                 <th>P&L %</th>
                 <th>Bars</th>
                 <th>Exit Reason</th>

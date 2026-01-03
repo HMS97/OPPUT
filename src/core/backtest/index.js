@@ -22,8 +22,12 @@ export { calculateStatistics, monteCarloSimulation, calculateEquityCurve } from 
 export { FixedBarsExit } from './strategies/fixed-bars.js'
 export { OppositeSignalExit } from './strategies/opposite-signal.js'
 export { TargetStopExit } from './strategies/target-stop.js'
+export { ButterflyExit } from './strategies/butterfly-exit.js'
 
 // Signal sources
 export { PatternDetectorSource } from './sources/pattern-adapter.js'
 export { DailySignalSource } from './sources/daily-signal-adapter.js'
 export { OISignalSource } from './sources/oi-adapter.js'
+export { IVSignalSource } from './sources/iv-adapter.js'
+export { OITrendSource } from './sources/oi-trend.js'
+export { OIMultiTFSource } from './sources/oi-multi-tf.js'

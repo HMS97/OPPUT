@@ -14,7 +14,19 @@ export default defineConfig({
         dashboard: resolve(__dirname, 'src/dashboard/index.html'),
         'spy-options': resolve(__dirname, 'src/spy-options/index.html'),
         backtest: resolve(__dirname, 'src/backtest/index.html'),
+        trading: resolve(__dirname, 'src/trading/index.html'),
       },
+      // Exclude Node.js-only modules from browser bundle
+      external: [
+        './cache.js',
+        './schwab.js',
+        './token-manager.js',
+        './rate-limiter.js',
+        'better-sqlite3',
+        'fs',
+        'path',
+        'url',
+      ],
     },
   },
 

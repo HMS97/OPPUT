@@ -152,3 +152,11 @@ OPPUT/
   - `src/core/data/yahoo.js`
   - `src/dashboard/main.js`
   - `src/spy-options/main.js`
+
+## Agent Reports
+
+### onboard (2026-01-01T22:03:59.256Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`
+

@@ -14,6 +14,8 @@ export function calculateStatistics(trades, initialCapital = 10000) {
     return getEmptyStats()
   }
 
+  console.log('[STATS DEBUG] Received trades[0].pnlPercent:', trades[0]?.pnlPercent)
+
   // Separate winners and losers
   const winners = trades.filter((t) => t.pnl > 0)
   const losers = trades.filter((t) => t.pnl < 0)

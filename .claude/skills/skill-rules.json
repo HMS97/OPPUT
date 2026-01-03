@@ -1,0 +1,30 @@
+{
+    "version": "1.0",
+    "description": "OPPUT project-specific skill rules",
+    "skills": {
+        "verify": {
+            "type": "process",
+            "enforcement": "suggest",
+            "priority": "critical",
+            "description": "Run verification before commits (build + module imports + smoke tests)",
+            "promptTriggers": {
+                "keywords": [
+                    "verify",
+                    "run verify",
+                    "check build",
+                    "test build",
+                    "before commit",
+                    "pre-commit",
+                    "validate project",
+                    "check project"
+                ],
+                "intentPatterns": [
+                    "(verify|check|test).*?(build|project|code)",
+                    "(before|pre).*?commit",
+                    "(run|do).*?verification"
+                ]
+            },
+            "reminder": "Run /verify before committing to ensure build integrity."
+        }
+    }
+}

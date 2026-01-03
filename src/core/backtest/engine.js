@@ -163,12 +163,27 @@ export class BacktestEngine {
     const tradesToClose = []
 
     for (const trade of this.openTrades) {
-      const { shouldExit, reason } = this.exitStrategy.shouldExit(trade, candle, currentSignal)
+      const exitResult = this.exitStrategy.shouldExit(trade, candle, currentSignal)
 
-      if (shouldExit) {
-        const closed = closeTrade(trade, candle, index, reason)
+      if (exitResult.shouldExit) {
+        const closed = closeTrade(trade, candle, index, exitResult.reason)
+
+        // If exit strategy provides custom P&L (e.g., butterfly payoff), use it directly
+        if (exitResult.butterflyPnL !== undefined) {
+          // butterflyPnL is a multiplier of risk (e.g., 6.4 = 6.4x profit, -1 = max loss)
+          // Convert to percentage based on position size
+          const riskPercent = this.positionPercent || 10
+          closed.pnlPercent = exitResult.butterflyPnL * riskPercent
+          closed.pnl = (closed.pnlPercent / 100) * this.initialCapital
+          closed.exitReason = `${exitResult.reason} (${exitResult.butterflyPnL >= 0 ? '+' : ''}${exitResult.butterflyPnL.toFixed(1)}x)`
+          // Use the pre-calculated pnl directly (don't recalculate)
+          this.equity += closed.pnl
+        } else {
+          // Standard P&L calculation for other exit strategies
+          this.equity += this.calculateTradePnL(closed)
+        }
+
         tradesToClose.push(closed)
-        this.equity += this.calculateTradePnL(closed)
 
         if (this.onTradeCallback) {
           this.onTradeCallback({ type: 'close', trade: closed })

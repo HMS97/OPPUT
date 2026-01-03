@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPPUT - Live Trading</title>
+  <script type="module" crossorigin src="../assets/trading-D6Faigtd.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/indicators-B1kEv_-x.js">
+  <link rel="modulepreload" crossorigin href="../assets/oi-adapter-CJGX5dQp.js">
+  <link rel="stylesheet" crossorigin href="../assets/trading-DEna6Sn2.css">
+</head>
+<body>
+  <header class="header">
+    <h1>Live Trading - Robinhood</h1>
+    <div class="header-controls">
+      <a href="../dashboard/" class="nav-link">Dashboard</a>
+      <a href="../backtest/" class="nav-link">Backtester</a>
+      <a href="../spy-options/" class="nav-link">Options Analysis</a>
+      <div class="status-badge">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="main-container">
+    <!-- Connection Status -->
+    <section class="connection-panel">
+      <div class="panel-header">
+        <h2>API Connection</h2>
+      </div>
+      <div class="connection-grid">
+        <div class="connection-card">
+          <div class="connection-icon" id="apiIcon">?</div>
+          <div class="connection-label">Robinhood API</div>
+          <div class="connection-status" id="apiStatus">Not Connected</div>
+          <button class="btn btn-primary" id="connectBtn">Connect</button>
+        </div>
+        <div class="connection-card">
+          <div class="connection-icon" id="authIcon">?</div>
+          <div class="connection-label">Authentication</div>
+          <div class="connection-status" id="authStatus">Not Authenticated</div>
+          <button class="btn btn-primary" id="loginBtn">Login</button>
+        </div>
+        <div class="connection-card">
+          <div class="connection-icon" id="modeIcon">DRY</div>
+          <div class="connection-label">Trading Mode</div>
+          <div class="connection-status" id="modeStatus">Dry-Run (Safe)</div>
+          <button class="btn btn-warning" id="modeToggle">Switch to Live</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Account Info -->
+    <section class="account-panel" id="accountPanel" style="display:none;">
+      <div class="panel-header">
+        <h2>Account</h2>
+      </div>
+      <div class="account-grid">
+        <div class="stat-card">
+          <div class="stat-value" id="buyingPower">$0.00</div>
+          <div class="stat-label">Buying Power</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="portfolioValue">$0.00</div>
+          <div class="stat-label">Portfolio Value</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="dayPnL">$0.00</div>
+          <div class="stat-label">Day P&L</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="openPositions">0</div>
+          <div class="stat-label">Open Positions</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Risk Limits -->
+    <section class="risk-panel">
+      <div class="panel-header">
+        <h2>Risk Controls</h2>
+        <span class="risk-status" id="riskStatus">Active</span>
+      </div>
+      <div class="risk-grid">
+        <div class="risk-item">
+          <span class="risk-label">Daily Trades</span>
+          <span class="risk-value"><span id="dailyTrades">0</span> / <span id="maxDailyTrades">3</span></span>
+          <div class="risk-bar"><div class="risk-fill" id="dailyTradesBar" style="width:0%"></div></div>
+        </div>
+        <div class="risk-item">
+          <span class="risk-label">Max Position</span>
+          <span class="risk-value">$<span id="maxPosition">500</span></span>
+        </div>
+        <div class="risk-item">
+          <span class="risk-label">Daily Loss Limit</span>
+          <span class="risk-value">$<span id="dailyLoss">0</span> / $<span id="maxDailyLoss">300</span></span>
+          <div class="risk-bar"><div class="risk-fill loss" id="dailyLossBar" style="width:0%"></div></div>
+        </div>
+        <div class="risk-item">
+          <span class="risk-label">Min Signal Strength</span>
+          <span class="risk-value"><span id="minStrength">60</span>%</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Signal Monitor -->
+    <section class="signal-panel">
+      <div class="panel-header">
+        <h2>Signal Monitor</h2>
+        <div class="monitor-controls">
+          <select id="symbolSelect" class="select-input">
+            <option value="SPY">SPY</option>
+            <option value="QQQ">QQQ</option>
+            <option value="NVDA">NVDA</option>
+            <option value="AAPL">AAPL</option>
+          </select>
+          <button class="btn btn-success" id="startMonitor">Start Monitoring</button>
+          <button class="btn btn-danger" id="stopMonitor" style="display:none;">Stop</button>
+        </div>
+      </div>
+      <div class="monitor-status" id="monitorStatus">
+        <div class="monitor-icon">?</div>
+        <div class="monitor-text">Click "Start Monitoring" to begin watching for signals</div>
+      </div>
+      <div class="current-signal" id="currentSignal" style="display:none;">
+        <div class="signal-type" id="signalType">--</div>
+        <div class="signal-details">
+          <span>Strength: <strong id="signalStrength">--%</strong></span>
+          <span>Strike: <strong id="signalStrike">$---</strong></span>
+          <span>Expiry: <strong id="signalExpiry">----</strong></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Trade Log -->
+    <section class="log-panel">
+      <div class="panel-header">
+        <h2>Trade Log</h2>
+        <button class="btn btn-secondary" id="clearLog">Clear</button>
+      </div>
+      <div class="trade-log" id="tradeLog">
+        <div class="log-empty">No trades yet. Start monitoring to see activity.</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Login Modal -->
+  <div class="modal-overlay" id="loginModal" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Robinhood Login</h3>
+        <button class="modal-close" id="closeModal">&times;</button>
+      </div>
+      <form id="loginForm">
+        <div class="form-group">
+          <label>Username (Email)</label>
+          <input type="email" id="loginUsername" placeholder="your@email.com" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" id="loginPassword" placeholder="Password" required>
+        </div>
+        <div class="form-group">
+          <label>MFA Code (from authenticator app)</label>
+          <input type="text" id="loginMfa" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}">
+        </div>
+        <div class="form-error" id="loginError" style="display:none;"></div>
+        <button type="submit" class="btn btn-primary btn-full" id="loginSubmit">Login</button>
+      </form>
+    </div>
+  </div>
+
+</body>
+</html>

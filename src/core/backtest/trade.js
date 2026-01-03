@@ -20,9 +20,27 @@
  * @property {number} pnl - Profit/loss in points
  * @property {number} pnlPercent - Profit/loss as percentage
  * @property {Object} metadata - Additional signal-specific data
+ * @property {string} optionType - Option type (CALL/PUT)
+ * @property {number} strike - Option strike price (ATM)
+ * @property {string} expiry - Option expiration date
+ * @property {number} contracts - Number of contracts
  */
 
 let tradeIdCounter = 0
+
+/**
+ * Calculate the next Friday expiry from a given date
+ * @param {number} timestamp - Entry timestamp
+ * @returns {string} - Expiry date as YYYY-MM-DD
+ */
+function getNextFridayExpiry(timestamp) {
+  const date = new Date(timestamp)
+  const dayOfWeek = date.getDay()
+  // Days until next Friday (5 = Friday)
+  const daysUntilFriday = (5 - dayOfWeek + 7) % 7 || 7
+  date.setDate(date.getDate() + daysUntilFriday)
+  return date.toISOString().slice(0, 10)
+}
 
 /**
  * Create a new trade from a signal
@@ -32,9 +50,12 @@ let tradeIdCounter = 0
  * @returns {Trade}
  */
 export function createTrade(signal, candle, candleIndex) {
+  const direction = signal.direction || signal.type.replace('STRONG_', '')
+  const strikePrice = Math.round(candle.close) // ATM strike
+
   return {
     id: ++tradeIdCounter,
-    signal: signal.direction || signal.type.replace('STRONG_', ''),
+    signal: direction,
     signalType: signal.type,
     strength: signal.strength,
     source: signal.source,
@@ -51,6 +72,11 @@ export function createTrade(signal, candle, candleIndex) {
     highPrice: candle.close,
     lowPrice: candle.close,
     metadata: signal.metadata || {},
+    // Option details
+    optionType: direction,
+    strike: strikePrice,
+    expiry: getNextFridayExpiry(candle.time),
+    contracts: signal.contracts || 1,
   }
 }
 

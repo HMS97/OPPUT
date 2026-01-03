@@ -7,16 +7,79 @@
 
 const DOLTHUB_API = 'https://www.dolthub.com/api/v1alpha1/post-no-preference/options'
 
+// LocalStorage cache for DoltHub queries (1 hour TTL)
+const CACHE_TTL_MS = 60 * 60 * 1000
+const CACHE_PREFIX = 'dolthub_cache_'
+
+/**
+ * Get cached query result from localStorage
+ */
+function getCachedQuery(cacheKey) {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const cached = localStorage.getItem(CACHE_PREFIX + cacheKey)
+    if (!cached) return null
+
+    const { data, timestamp } = JSON.parse(cached)
+    if (Date.now() - timestamp > CACHE_TTL_MS) {
+      localStorage.removeItem(CACHE_PREFIX + cacheKey)
+      return null
+    }
+    return data
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Save query result to localStorage cache
+ */
+function setCachedQuery(cacheKey, data) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(CACHE_PREFIX + cacheKey, JSON.stringify({
+      data,
+      timestamp: Date.now()
+    }))
+  } catch {
+    // localStorage full or unavailable
+  }
+}
+
+/**
+ * Generate cache key from SQL query
+ */
+function getCacheKey(sql) {
+  // Simple hash of the SQL query
+  let hash = 0
+  for (let i = 0; i < sql.length; i++) {
+    hash = ((hash << 5) - hash) + sql.charCodeAt(i)
+    hash |= 0
+  }
+  return hash.toString(36)
+}
+
 /**
  * Execute SQL query against DoltHub options database
  * @param {string} sql - SQL query
  * @returns {Promise<Array>} - Query results
  */
 async function queryDoltHub(sql) {
+  // Check cache first
+  const cacheKey = getCacheKey(sql)
+  const cached = getCachedQuery(cacheKey)
+  if (cached) {
+    console.log('[DoltHub] Cache hit')
+    return cached
+  }
+
   const url = `${DOLTHUB_API}?q=${encodeURIComponent(sql)}`
 
   try {
-    const response = await fetch(url)
+    console.log('[DoltHub] Fetching from API...')
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(30000) // 30 second timeout
+    })
     if (!response.ok) {
       throw new Error(`DoltHub API error: ${response.status}`)
     }
@@ -27,7 +90,12 @@ async function queryDoltHub(sql) {
       throw new Error(`Query failed: ${data.query_execution_message}`)
     }
 
-    return data.rows || []
+    const rows = data.rows || []
+
+    // Cache successful results
+    setCachedQuery(cacheKey, rows)
+
+    return rows
   } catch (error) {
     console.error('[DoltHub] Query error:', error.message)
     throw error

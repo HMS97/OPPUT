@@ -71,3 +71,10 @@ export {
   monteCarloSimulation,
   calculateEquityCurve,
 } from './backtest/index.js'
+
+// Trading - Robinhood automated execution
+export {
+  OrderExecutor,
+  RiskManager,
+  SignalRunner,
+} from './trading/index.js'

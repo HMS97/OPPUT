@@ -354,6 +354,29 @@ input[type="range"]::-webkit-slider-thumb {
   font-size: 12px;
 }
 
+/* Accent Button - Gold theme for special presets */
+.btn-accent {
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--accent-gold), #d97706);
+  border: 1px solid var(--accent-gold);
+  border-radius: var(--radius-sm);
+  color: var(--bg-primary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+.btn-accent:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.btn-accent.btn-sm {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
 .btn-icon {
   font-size: 12px;
 }

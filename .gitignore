@@ -3,3 +3,10 @@ node_modules/
 
 # Continuous Claude cache (local only)
 .claude/cache/
+
+# SQLite options cache
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/.schwab-tokens.json
+.claude/tsc-cache/
