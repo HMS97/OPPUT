@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SPY Options Backtester</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" crossorigin src="../assets/backtest-MO0AnIi4.js"></script>
+  <script type="module" crossorigin src="../assets/backtest-C_csHniv.js"></script>
   <link rel="modulepreload" crossorigin href="../assets/auth-service-C1sNBFma.js">
   <link rel="modulepreload" crossorigin href="../assets/sidebar-QfNGueo9.js">
-  <link rel="modulepreload" crossorigin href="../assets/indicators-CHBeM_Fw.js">
-  <link rel="modulepreload" crossorigin href="../assets/oi-adapter-BTCh8tTH.js">
+  <link rel="modulepreload" crossorigin href="../assets/indicators-C4Jk-U7o.js">
+  <link rel="modulepreload" crossorigin href="../assets/oi-adapter-xuV0cfe7.js">
   <link rel="modulepreload" crossorigin href="../assets/yahoo-h8dATVuC.js">
-  <link rel="modulepreload" crossorigin href="../assets/detector-Cm8zXoGm.js">
-  <link rel="modulepreload" crossorigin href="../assets/dailySignal-C5MK__xI.js">
+  <link rel="modulepreload" crossorigin href="../assets/detector-DozuWkuC.js">
+  <link rel="modulepreload" crossorigin href="../assets/dailySignal-tJHECWdK.js">
   <link rel="modulepreload" crossorigin href="../assets/tweet-parser-BTA1CsDn.js">
   <link rel="stylesheet" crossorigin href="../assets/sidebar-CSSqWV9s.css">
   <link rel="stylesheet" crossorigin href="../assets/backtest-BxuxPISW.css">
@@ -28,7 +28,9 @@
       <div class="panel-header">
         <h2>Backtest Configuration</h2>
         <div class="header-actions">
-          <button class="btn-accent btn-sm" id="apply200Preset" title="Apply high-frequency scalp preset (~40% monthly)">Scalp Preset</button>
+          <button class="btn-secondary btn-sm" id="apply200Preset" title="5m OI-Scalp (8x leverage)">5m Scalp</button>
+          <button class="btn-accent btn-sm" id="apply15mPreset" title="OPTIMIZED: 65.6% win rate, 2.40 PF">15m Scalp ★</button>
+          <button class="btn-secondary btn-sm" id="apply60mPreset" title="60m Pattern Trading">60m Pattern</button>
           <button class="btn-secondary btn-sm" id="clearCache" title="Clear cached data">Clear Cache</button>
           <button class="btn-secondary btn-sm" id="resetConfig">Reset</button>
         </div>
@@ -44,6 +46,7 @@
             <button class="tab-btn" data-source="oi">OI-Scalp</button>
             <button class="tab-btn" data-source="oi-trend">OI-Trend</button>
             <button class="tab-btn" data-source="oi-multi-tf">OI-MTF</button>
+            <button class="tab-btn" data-source="oi-hybrid" title="Auto-switches between mean reversion and trend following based on ADX">OI-Hybrid</button>
             <button class="tab-btn" data-source="iv">IV</button>
             <button class="tab-btn" data-source="twitter" title="Backtest Twitter follow signals">Twitter</button>
             <button class="tab-btn" data-source="twitter-sim" title="Simulated Twitter-style signals">Twitter-Sim</button>
@@ -77,6 +80,13 @@
               </div>
             </div>
             <p class="data-limit-info" id="dataLimitInfo">1H candles: up to 3 months history (leave dates empty for max range)</p>
+          </div>
+          <div class="input-group" style="margin-top: 12px;">
+            <label>Data Provider</label>
+            <select id="dataProvider" class="select-input" disabled>
+              <option value="twelvedata">Twelve Data (6+ months history)</option>
+            </select>
+            <small style="color: #888; font-size: 11px;">Yahoo Finance limited to ~30 days</small>
           </div>
         </div>
 

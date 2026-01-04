@@ -15,6 +15,10 @@ const PORT = process.env.PORT || 3001
 const EODHD_BASE = 'https://eodhd.com/api'
 const EODHD_API_KEY = process.env.EODHD_API_KEY
 
+// Twelve Data API configuration
+const TWELVEDATA_BASE = 'https://api.twelvedata.com'
+const TWELVEDATA_API_KEY = process.env.TWELVEDATA_API_KEY
+
 const YAHOO_BASE = 'https://query1.finance.yahoo.com'
 
 // Enable CORS for all origins (dev mode)
@@ -307,6 +311,211 @@ app.get('/api/options/:symbol/:expiry', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, error: error.message })
   }
+})
+
+// ================== Twelve Data Endpoints ==================
+
+const TWELVEDATA_INTERVAL_MAP = {
+  5: '5min',
+  15: '15min',
+  60: '1h',
+  240: '4h',
+}
+
+/**
+ * Parse Twelve Data datetime string (ET timezone) to Unix timestamp
+ * @param {string} dateStr - "2025-12-28 09:30:00" in ET timezone
+ * @returns {number} Unix timestamp in seconds
+ */
+function parseTwelveDataDatetime(dateStr) {
+  const [datePart, timePart] = dateStr.split(' ')
+  const [year, month, day] = datePart.split('-').map(Number)
+  const [hour, minute, second] = timePart.split(':').map(Number)
+
+  // Check if date is in DST (Mar second Sunday - Nov first Sunday, approximate)
+  const isDST = month > 3 && month < 11 ||
+                (month === 3 && day >= 8) ||
+                (month === 11 && day < 7)
+  const etOffsetHours = isDST ? 4 : 5 // EDT = UTC-4, EST = UTC-5
+
+  // Create UTC timestamp by adding ET offset to local time
+  const utc = Date.UTC(year, month - 1, day, hour + etOffsetHours, minute, second || 0)
+  return Math.floor(utc / 1000)
+}
+
+// GET /api/twelvedata/chart/:symbol - Fetch candle data from Twelve Data
+// Implements windowed fetching for long date ranges (free tier = 5000 limit)
+app.get('/api/twelvedata/chart/:symbol', async (req, res) => {
+  try {
+    if (!TWELVEDATA_API_KEY) {
+      return res.status(400).json({
+        success: false,
+        error: 'TWELVEDATA_API_KEY not configured in environment'
+      })
+    }
+
+    const symbol = req.params.symbol.toUpperCase()
+    const timeframe = parseInt(req.query.timeframe) || 5
+    const interval = TWELVEDATA_INTERVAL_MAP[timeframe] || '5min'
+    const startDate = req.query.start_date // YYYY-MM-DD
+    const endDate = req.query.end_date // YYYY-MM-DD
+
+    // Calculate if we need windowed fetching
+    // 5000 candles @ 5min = ~64 trading days, use 50-day windows for safety
+    const WINDOW_DAYS = 50
+    const needsWindowing = startDate && endDate &&
+      (new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24) > WINDOW_DAYS
+
+    if (needsWindowing) {
+      console.log(`[TwelveData] Long range detected, using windowed fetching...`)
+
+      let allValues = []
+      let windowEnd = new Date(endDate)
+      let windowCount = 0
+      const startLimit = new Date(startDate)
+
+      while (windowEnd > startLimit && windowCount < 10) {
+        const windowStart = new Date(windowEnd)
+        windowStart.setDate(windowStart.getDate() - WINDOW_DAYS)
+        if (windowStart < startLimit) windowStart.setTime(startLimit.getTime())
+
+        const windowStartStr = windowStart.toISOString().split('T')[0]
+        const windowEndStr = windowEnd.toISOString().split('T')[0]
+
+        console.log(`[TwelveData] Window ${++windowCount}: ${windowStartStr} to ${windowEndStr}`)
+
+        const params = new URLSearchParams({
+          symbol,
+          interval,
+          apikey: TWELVEDATA_API_KEY,
+          outputsize: '5000',
+          format: 'JSON',
+          timezone: 'America/New_York',  // ET timezone for market hours
+          start_date: `${windowStartStr} 09:30:00`,
+          end_date: `${windowEndStr} 16:00:00`,
+        })
+
+        try {
+          const response = await fetch(`${TWELVEDATA_BASE}/time_series?${params.toString()}`, {
+            signal: AbortSignal.timeout(30000),
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.values && Array.isArray(data.values)) {
+              allValues.push(...data.values)
+              console.log(`[TwelveData] Window ${windowCount} returned ${data.values.length} candles`)
+            }
+          }
+        } catch (e) {
+          console.log(`[TwelveData] Window ${windowCount} failed: ${e.message}`)
+        }
+
+        // Move to next window
+        windowEnd = new Date(windowStart)
+        windowEnd.setDate(windowEnd.getDate() - 1)
+
+        // Rate limit delay
+        await new Promise(r => setTimeout(r, 500))
+      }
+
+      // Dedupe and sort (oldest first)
+      const uniqueValues = [...new Map(allValues.map(v => [v.datetime, v])).values()]
+      uniqueValues.sort((a, b) => parseTwelveDataDatetime(a.datetime) - parseTwelveDataDatetime(b.datetime))
+
+      console.log(`[TwelveData] Total unique candles: ${uniqueValues.length}`)
+
+      const timestamps = uniqueValues.map(v => parseTwelveDataDatetime(v.datetime))
+      const quotes = {
+        open: uniqueValues.map(v => parseFloat(v.open)),
+        high: uniqueValues.map(v => parseFloat(v.high)),
+        low: uniqueValues.map(v => parseFloat(v.low)),
+        close: uniqueValues.map(v => parseFloat(v.close)),
+        volume: uniqueValues.map(v => parseInt(v.volume) || 0),
+      }
+
+      return res.json({
+        chart: {
+          result: [{
+            meta: { symbol, currency: 'USD', source: 'twelvedata-windowed' },
+            timestamp: timestamps,
+            indicators: { quote: [quotes] }
+          }]
+        }
+      })
+    }
+
+    // Standard single fetch for short ranges
+    const params = new URLSearchParams({
+      symbol,
+      interval,
+      apikey: TWELVEDATA_API_KEY,
+      outputsize: '5000',
+      format: 'JSON',
+      timezone: 'America/New_York',  // Ensure ET timezone for market hours alignment
+    })
+
+    // Add date range with market hours start time to ensure we get morning data
+    if (startDate) params.append('start_date', `${startDate} 09:30:00`)
+    if (endDate) params.append('end_date', `${endDate} 16:00:00`)
+
+    const url = `${TWELVEDATA_BASE}/time_series?${params.toString()}`
+    console.log(`[TwelveData] Fetching ${symbol} ${interval}... URL: ${url.substring(0, 200)}...`)
+
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(30000),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Twelve Data HTTP error: ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (data.status === 'error') {
+      throw new Error(`Twelve Data API error: ${data.message}`)
+    }
+
+    if (!data.values || !Array.isArray(data.values)) {
+      throw new Error('Invalid response format from Twelve Data')
+    }
+
+    console.log(`[TwelveData] Received ${data.values.length} candles`)
+
+    // Convert to Yahoo-compatible format (oldest first)
+    const values = data.values.reverse()
+    const timestamps = values.map(v => parseTwelveDataDatetime(v.datetime))
+    const quotes = {
+      open: values.map(v => parseFloat(v.open)),
+      high: values.map(v => parseFloat(v.high)),
+      low: values.map(v => parseFloat(v.low)),
+      close: values.map(v => parseFloat(v.close)),
+      volume: values.map(v => parseInt(v.volume) || 0),
+    }
+
+    res.json({
+      chart: {
+        result: [{
+          meta: { symbol, currency: 'USD', source: 'twelvedata' },
+          timestamp: timestamps,
+          indicators: { quote: [quotes] }
+        }]
+      }
+    })
+  } catch (error) {
+    console.error('[TwelveData] Error:', error.message)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// GET /api/twelvedata/status - Check Twelve Data configuration
+app.get('/api/twelvedata/status', (req, res) => {
+  res.json({
+    success: true,
+    configured: !!TWELVEDATA_API_KEY,
+    source: 'twelvedata',
+    timestamp: Date.now(),
+  })
 })
 
 // ================== EODHD Endpoints ==================
@@ -1055,6 +1264,9 @@ app.listen(PORT, () => {
   console.log('  GET /api/quote/:symbol')
   console.log('  GET /api/options/:symbol')
   console.log('  GET /api/options/:symbol/:expiry')
+  console.log('[Server] Twelve Data endpoints:')
+  console.log(`  GET /api/twelvedata/chart/:symbol  ${TWELVEDATA_API_KEY ? '✓ configured' : '✗ not configured'}`)
+  console.log('  GET /api/twelvedata/status')
   console.log('[Server] Unicorn Options endpoints:')
   console.log(`  GET /api/unicorn/options/:symbol  ${EODHD_API_KEY ? '(configured)' : '(not configured)'}`)
   console.log(`  GET /api/unicorn/wasp/:symbol     ${EODHD_API_KEY ? '(configured)' : '(not configured)'}`)
