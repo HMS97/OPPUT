@@ -16,6 +16,7 @@ import {
   checkMonthlyOpEx,
   getVIXRegime,
 } from '@core'
+import { initSidebar } from '../shared/sidebar.js'
 
 class SPYOptionsAnalyzer {
   constructor() {
@@ -49,6 +50,9 @@ class SPYOptionsAnalyzer {
 
   async init() {
     console.log('[SPY Options Dashboard] Initializing...')
+    // Initialize sidebar navigation
+    await initSidebar({ activePage: 'spy-options' })
+
     this.bindEvents()
     this.updateOpExBadge()
     await Promise.all([

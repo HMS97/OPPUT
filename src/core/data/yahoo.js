@@ -10,6 +10,7 @@ import { CORS_PROXIES } from '../utils/constants.js'
 
 const CACHE_PREFIX = 'opput_candle_'
 const CACHE_EXPIRY_MS = 60 * 60 * 1000 // 1 hour for intraday data
+const CACHE_EXPIRY_3M_MS = 4 * 60 * 60 * 1000 // 4 hours for 3-month data (less frequent updates needed)
 
 /**
  * Generate cache key for candle data
@@ -30,11 +31,22 @@ function getCachedCandles(symbol, timeframe, startDate, endDate) {
     const cached = localStorage.getItem(key)
     if (!cached) return null
 
-    const { data, timestamp } = JSON.parse(cached)
+    const { data, timestamp, is3MonthData } = JSON.parse(cached)
     const age = Date.now() - timestamp
 
-    // Check expiry - intraday data expires after 1 hour, daily after 24 hours
-    const expiry = timeframe >= 240 ? 24 * 60 * 60 * 1000 : CACHE_EXPIRY_MS
+    // Check expiry:
+    // - 3-month data: 4 hours (less frequent updates needed for historical analysis)
+    // - Daily data: 24 hours
+    // - Intraday: 1 hour
+    let expiry
+    if (is3MonthData) {
+      expiry = CACHE_EXPIRY_3M_MS
+    } else if (timeframe >= 240) {
+      expiry = 24 * 60 * 60 * 1000
+    } else {
+      expiry = CACHE_EXPIRY_MS
+    }
+
     if (age > expiry) {
       localStorage.removeItem(key)
       return null
@@ -50,18 +62,20 @@ function getCachedCandles(symbol, timeframe, startDate, endDate) {
 
 /**
  * Cache candle data
+ * @param {boolean} is3MonthData - Flag for 3-month data (uses longer expiry)
  */
-function setCachedCandles(symbol, timeframe, startDate, endDate, candles) {
+function setCachedCandles(symbol, timeframe, startDate, endDate, candles, is3MonthData = false) {
   try {
     const key = getCacheKey(symbol, timeframe, startDate, endDate)
     const cacheData = {
       data: candles,
       timestamp: Date.now(),
+      is3MonthData,
     }
     localStorage.setItem(key, JSON.stringify(cacheData))
-    console.log(`[Cache] Stored ${candles.length} candles for ${symbol} ${timeframe}m`)
+    console.log(`[Cache] Stored ${candles.length} candles for ${symbol} ${timeframe}m${is3MonthData ? ' (3-month)' : ''}`)
 
-    // Cleanup old cache entries (keep only last 10)
+    // Cleanup old cache entries (keep only last 20 for 3-month data support)
     cleanupCache()
   } catch (e) {
     console.log('[Cache] Error writing cache:', e.message)
@@ -74,6 +88,7 @@ function setCachedCandles(symbol, timeframe, startDate, endDate, candles) {
 
 /**
  * Clean up old cache entries
+ * Keeps more entries for 3-month data support
  */
 function cleanupCache() {
   try {
@@ -83,16 +98,21 @@ function cleanupCache() {
       if (key?.startsWith(CACHE_PREFIX)) {
         const cached = localStorage.getItem(key)
         if (cached) {
-          const { timestamp } = JSON.parse(cached)
-          keys.push({ key, timestamp })
+          const { timestamp, is3MonthData } = JSON.parse(cached)
+          keys.push({ key, timestamp, is3MonthData })
         }
       }
     }
 
-    // Keep only 10 most recent entries
-    if (keys.length > 10) {
-      keys.sort((a, b) => b.timestamp - a.timestamp)
-      keys.slice(10).forEach(({ key }) => localStorage.removeItem(key))
+    // Keep 3-month data entries longer (up to 20 total, prioritize 3-month data)
+    if (keys.length > 20) {
+      // Sort by: 3-month data first, then by timestamp
+      keys.sort((a, b) => {
+        if (a.is3MonthData && !b.is3MonthData) return 1
+        if (!a.is3MonthData && b.is3MonthData) return -1
+        return b.timestamp - a.timestamp
+      })
+      keys.slice(20).forEach(({ key }) => localStorage.removeItem(key))
     }
   } catch (e) {
     // Ignore cleanup errors
@@ -128,12 +148,25 @@ export function clearCandleCache() {
 
 /**
  * Timeframe configuration for Yahoo Finance API
+ * Default ranges set to 3 months for backtesting/analysis
+ * Note: Yahoo limits intraday data, so we fetch in windows
  */
 const TF_CONFIG = {
-  5: { interval: '5m', range: '5d', lookback: 5 },
-  15: { interval: '15m', range: '1mo', lookback: 15 },
-  60: { interval: '60m', range: '3mo', lookback: 60 },
-  240: { interval: '1d', range: '1y', lookback: 180 },
+  5: { interval: '5m', range: '60d', lookback: 60, maxDays: 60 },   // Yahoo max: ~60 days for 5m
+  15: { interval: '15m', range: '60d', lookback: 60, maxDays: 60 }, // Yahoo max: ~60 days for 15m
+  60: { interval: '60m', range: '3mo', lookback: 90, maxDays: 730 }, // Yahoo allows more for hourly
+  240: { interval: '1d', range: '2y', lookback: 365, maxDays: 730 }, // Daily data, 2 years
+}
+
+/**
+ * Default data range in days for each timeframe
+ * Used when no custom date range is specified
+ */
+export const DEFAULT_DATA_DAYS = {
+  5: 90,    // 3 months (fetched in windows)
+  15: 90,   // 3 months (fetched in windows)
+  60: 180,  // 6 months
+  240: 730, // 2 years
 }
 
 /**
@@ -459,9 +492,21 @@ export async function fetchCandleData(symbol, timeframe, options = null) {
     console.log('[Data] Falling back to CORS proxies...')
     data = await fetchWithProxy(yahooUrl)
   }
+
+  // Handle case where all data fetching attempts failed
+  if (!data) {
+    throw new Error('Failed to fetch data from all sources. Please ensure the backend server is running (npm start) or try again later.')
+  }
+
   // Handle Yahoo 422 errors (date range too long)
   if (data?.success === false && data?.error?.includes('422')) {
     throw new Error('Date range too long for this timeframe. Yahoo Finance has limited historical data for intraday intervals. Try reducing the date range or using a longer timeframe.')
+  }
+
+  // Handle Yahoo error responses
+  if (data?.chart?.error) {
+    const error = data.chart.error
+    throw new Error(`Yahoo Finance error: ${error.description || error.code || 'Unknown error'}`)
   }
 
   const candles = parseYahooCandles(data, replayDatetime)
@@ -707,6 +752,131 @@ export function generateDemoData(timeframe) {
       volume: Math.random() * 1000000,
     })
     price = close
+  }
+
+  return candles
+}
+
+/**
+ * Fetch 3-month candle data with automatic windowed fetching and caching
+ * This is the recommended way to load historical data for backtesting/analysis
+ *
+ * @param {string} symbol - Stock symbol (e.g., 'SPY')
+ * @param {number} timeframe - Timeframe in minutes (5, 15, 60, 240)
+ * @param {Object} options - Options
+ * @param {boolean} options.skipCache - Skip cache and force fresh fetch
+ * @param {Function} options.onProgress - Progress callback (0-100)
+ * @returns {Promise<Array>} 3 months of candle data
+ */
+export async function fetch3MonthData(symbol, timeframe, options = {}) {
+  const { skipCache = false, onProgress = null } = options
+
+  // Calculate date range for 3 months
+  const endDate = new Date()
+  const startDate = new Date()
+  const days = DEFAULT_DATA_DAYS[timeframe] || 90
+  startDate.setDate(startDate.getDate() - days)
+
+  // Check cache first
+  if (!skipCache && typeof localStorage !== 'undefined') {
+    const cached = getCachedCandles(symbol, timeframe, startDate, endDate)
+    if (cached) {
+      console.log(`[Data] Using cached 3-month data for ${symbol} ${timeframe}m`)
+      return cached
+    }
+  }
+
+  console.log(`[Data] Fetching ${days} days of ${timeframe}m data for ${symbol}`)
+
+  const config = TF_CONFIG[timeframe] || TF_CONFIG[60]
+  const maxDays = config.maxDays || 60
+
+  // For intraday data, Yahoo has limits - fetch in windows
+  if (timeframe <= 15 && days > maxDays) {
+    const allCandles = []
+    const windowSize = maxDays - 5 // Slight overlap for safety
+    let windowStart = new Date(startDate)
+    let windowEnd = new Date(windowStart)
+    windowEnd.setDate(windowEnd.getDate() + windowSize)
+    let windowIndex = 0
+    const totalWindows = Math.ceil(days / windowSize)
+
+    while (windowStart < endDate) {
+      if (windowEnd > endDate) {
+        windowEnd = new Date(endDate)
+      }
+
+      if (onProgress) {
+        onProgress(Math.round((windowIndex / totalWindows) * 80))
+      }
+
+      console.log(`[Data] Fetching window ${windowIndex + 1}/${totalWindows}: ${windowStart.toISOString().split('T')[0]} to ${windowEnd.toISOString().split('T')[0]}`)
+
+      try {
+        const windowCandles = await fetchCandleData(symbol, timeframe, {
+          startDate: windowStart,
+          endDate: windowEnd,
+          skipCache: true, // We'll cache the combined result
+        })
+
+        if (windowCandles && windowCandles.length > 0) {
+          // Merge candles, avoiding duplicates by timestamp
+          const existingTimes = new Set(allCandles.map(c => c.time))
+          for (const candle of windowCandles) {
+            if (!existingTimes.has(candle.time)) {
+              allCandles.push(candle)
+              existingTimes.add(candle.time)
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`[Data] Window fetch failed:`, e.message)
+        // Continue with next window
+      }
+
+      // Move to next window
+      windowStart = new Date(windowEnd)
+      windowEnd = new Date(windowStart)
+      windowEnd.setDate(windowEnd.getDate() + windowSize)
+      windowIndex++
+
+      // Small delay to avoid rate limiting
+      if (windowStart < endDate) {
+        await new Promise(r => setTimeout(r, 500))
+      }
+    }
+
+    // Sort by time
+    allCandles.sort((a, b) => a.time - b.time)
+
+    if (onProgress) {
+      onProgress(100)
+    }
+
+    console.log(`[Data] Fetched ${allCandles.length} candles across ${windowIndex} windows`)
+
+    // Cache the combined result
+    if (typeof localStorage !== 'undefined' && allCandles.length > 0) {
+      setCachedCandles(symbol, timeframe, startDate, endDate, allCandles, true)
+    }
+
+    return allCandles
+  }
+
+  // For hourly/daily data, single fetch is fine
+  const candles = await fetchCandleData(symbol, timeframe, {
+    startDate,
+    endDate,
+    skipCache: true,
+  })
+
+  // Cache the result
+  if (typeof localStorage !== 'undefined' && candles && candles.length > 0) {
+    setCachedCandles(symbol, timeframe, startDate, endDate, candles, true)
+  }
+
+  if (onProgress) {
+    onProgress(100)
   }
 
   return candles

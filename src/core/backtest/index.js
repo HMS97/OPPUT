@@ -18,6 +18,15 @@ export {
 // Statistics
 export { calculateStatistics, monteCarloSimulation, calculateEquityCurve } from './statistics.js'
 
+// Option Pricing
+export {
+  blackScholesPrice,
+  blackScholesDelta,
+  calculateOptionPrice,
+  calculateOptionPnL,
+  estimateIV,
+} from './option-pricing.js'
+
 // Exit strategies
 export { FixedBarsExit } from './strategies/fixed-bars.js'
 export { OppositeSignalExit } from './strategies/opposite-signal.js'
@@ -31,3 +40,4 @@ export { OISignalSource } from './sources/oi-adapter.js'
 export { IVSignalSource } from './sources/iv-adapter.js'
 export { OITrendSource } from './sources/oi-trend.js'
 export { OIMultiTFSource } from './sources/oi-multi-tf.js'
+export { TwitterFollowSource, SimulatedTwitterFollowSource } from './sources/twitter-follow.js'

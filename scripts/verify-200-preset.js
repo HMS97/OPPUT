@@ -19,10 +19,10 @@ async function main() {
   const origLog = console.log
   console.log = () => {}
 
-  // Fetch data
+  // Fetch data (60 days max for 5m data from Yahoo)
   const endDate = new Date()
   const startDate = new Date()
-  startDate.setDate(startDate.getDate() - 90)
+  startDate.setDate(startDate.getDate() - 60)
 
   const candles = await fetchCandleData('SPY', 5, { startDate, endDate })
 
@@ -35,7 +35,7 @@ async function main() {
     entryDeviation: 0.1,
     targetPercent: 0.25,
     stopPercent: 0.15,
-    leverage: 25,
+    leverage: 8,  // Realistic butterfly spread leverage
     useUnderlyingPnL: true,  // Exit based on underlying price
   }
 
@@ -64,7 +64,7 @@ async function main() {
     candles,
     initialCapital: 10000,
     positionSize: 'percent',
-    positionPercent: 5,
+    positionPercent: 10,  // 10% of capital per trade
     maxConcurrentTrades: 1,
     timeframe: 5,
   })
@@ -72,18 +72,33 @@ async function main() {
   const results = await engine.run()
 
   // Apply leverage (simulate options leverage)
+  // Use dynamic contract sizing from engine
   const leveragedTrades = results.trades.map(t => {
     const direction = t.signal === 'CALL' ? 1 : -1
     const underlyingPnL = ((t.exitPrice - t.entryPrice) / t.entryPrice) * 100 * direction
+    const leveragedPnLPercent = underlyingPnL * config.leverage
+
+    // Calculate dollar P&L based on actual position (contracts * option price * 100)
+    const positionCost = t.contracts * t.optionEntryPrice * 100
+    const pnl = (leveragedPnLPercent / 100) * positionCost
+
     return {
       ...t,
-      pnlPercent: underlyingPnL * config.leverage,
-      pnl: (underlyingPnL * config.leverage / 100) * 10000 * 0.05,
+      pnlPercent: leveragedPnLPercent,
+      pnl: pnl,
     }
   })
 
-  // Calculate equity curve
-  const equityCurve = calculateEquityCurve(leveragedTrades, 10000, 100)
+  // Debug: Show sample trades
+  console.log = origLog
+  console.log('\nSample trades:')
+  leveragedTrades.slice(0, 5).forEach((t, i) => {
+    console.log(`  ${i+1}. ${t.signal} Qty:${t.contracts} OptEntry:$${t.optionEntryPrice?.toFixed(2)} Entry:${t.entryPrice?.toFixed(2)} Exit:${t.exitPrice?.toFixed(2)} pnl%:${t.pnlPercent?.toFixed(2)}% pnl:$${t.pnl?.toFixed(2)}`)
+  })
+  console.log = () => {}
+
+  // Calculate equity curve using actual dollar P&L
+  const equityCurve = calculateEquityCurve(leveragedTrades, 10000, 10, true)
   const finalEquity = equityCurve.length > 0 ? equityCurve[equityCurve.length - 1].equity : 10000
   const minEquity = equityCurve.length > 0 ? Math.min(...equityCurve.map(e => e.equity)) : 10000
   const totalReturn = ((finalEquity - 10000) / 10000) * 100

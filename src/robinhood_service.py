@@ -25,8 +25,48 @@ class RobinhoodService:
         self.password = os.getenv('ROBINHOOD_PASSWORD')
         self.mfa_code = os.getenv('ROBINHOOD_MFA_CODE')
 
+        # Try to load cached session on init
+        self._try_load_cached_session()
+
+    def _try_load_cached_session(self):
+        """Try to load and use a previously cached session"""
+        import pickle
+        from robin_stocks.robinhood.helper import update_session, set_login_state, request_get
+        from robin_stocks.robinhood.urls import positions_url
+
+        home_dir = os.path.expanduser("~")
+        pickle_path = os.path.join(home_dir, ".tokens", "robinhood.pickle")
+
+        if os.path.isfile(pickle_path):
+            try:
+                with open(pickle_path, 'rb') as f:
+                    pickle_data = pickle.load(f)
+                    access_token = pickle_data['access_token']
+                    token_type = pickle_data['token_type']
+
+                    # Set the session token
+                    update_session('Authorization', f'{token_type} {access_token}')
+                    set_login_state(True)
+
+                    # Verify the token is still valid
+                    res = request_get(positions_url(), 'pagination', {'nonzero': 'true'}, jsonify_data=False)
+                    res.raise_for_status()
+
+                    self.is_authenticated = True
+                    self.username = self.username or 'cached_session'
+                    print("✓ Loaded cached Robinhood session")
+            except Exception as e:
+                print(f"Cached session invalid or expired: {e}")
+                set_login_state(False)
+                update_session('Authorization', None)
+
     async def authenticate(self) -> bool:
         """Authenticate with Robinhood"""
+        if self.is_authenticated:
+            return True
+
+        # Try cached session first
+        self._try_load_cached_session()
         if self.is_authenticated:
             return True
 

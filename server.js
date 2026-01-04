@@ -693,12 +693,357 @@ app.get('/api/unicorn/status', (req, res) => {
   })
 })
 
+// ================== Twitter API Endpoints ==================
+
+const TWITTER_API_KEY = process.env.TWITTER_API_KEY
+const TWITTER_API_KEY_SECRET = process.env.TWITTER_API_KEY_SECRET
+const TWITTER_BEARER_TOKEN = process.env.TWITTER_BEARER_TOKEN
+
+// TwitterAPI.io (third-party, more reliable)
+const TWITTERAPI_IO_KEY = process.env.twitterapiUserIDAPI_KEY
+const TWITTERAPI_IO_USER_ID = process.env.twitterapiUserID
+
+// Cache bearer token and user IDs
+let twitterBearerToken = null
+let twitterTokenExpiry = 0
+const twitterUserCache = new Map()
+
+/**
+ * Get Twitter Bearer Token
+ * Uses TWITTER_BEARER_TOKEN from env if available, otherwise generates from API key/secret
+ */
+async function getTwitterBearerToken() {
+  // Use bearer token from env if available (preferred)
+  if (TWITTER_BEARER_TOKEN) {
+    // Decode URL-encoded token if needed
+    const token = decodeURIComponent(TWITTER_BEARER_TOKEN)
+    console.log('[Twitter] Using bearer token from environment')
+    return token
+  }
+
+  // Fallback: Generate from API key/secret
+  const now = Date.now()
+  if (twitterBearerToken && twitterTokenExpiry > now) {
+    return twitterBearerToken
+  }
+
+  if (!TWITTER_API_KEY || !TWITTER_API_KEY_SECRET) {
+    throw new Error('Twitter API credentials not configured. Set TWITTER_BEARER_TOKEN or TWITTER_API_KEY + TWITTER_API_KEY_SECRET in .env')
+  }
+
+  const credentials = Buffer.from(`${TWITTER_API_KEY}:${TWITTER_API_KEY_SECRET}`).toString('base64')
+
+  const response = await fetch('https://api.twitter.com/oauth2/token', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${credentials}`,
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: 'grant_type=client_credentials'
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to get Twitter bearer token: ${response.status} - ${error}`)
+  }
+
+  const data = await response.json()
+  twitterBearerToken = data.access_token
+  twitterTokenExpiry = now + 60 * 60 * 1000 // Cache for 1 hour
+  console.log('[Twitter] Got bearer token via OAuth')
+  return twitterBearerToken
+}
+
+/**
+ * Get Twitter user ID from username
+ */
+async function getTwitterUserId(username) {
+  // Check cache
+  if (twitterUserCache.has(username)) {
+    return twitterUserCache.get(username)
+  }
+
+  const token = await getTwitterBearerToken()
+  const response = await fetch(`https://api.twitter.com/2/users/by/username/${username}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to get user ID: ${response.status} - ${error}`)
+  }
+
+  const data = await response.json()
+  const userId = data.data?.id
+  if (userId) {
+    twitterUserCache.set(username, userId)
+  }
+  return userId
+}
+
+/**
+ * Fetch tweets using TwitterAPI.io (third-party, no rate limits)
+ * @param {string} username - Twitter username
+ * @param {string} cursor - Pagination cursor for next page
+ */
+async function fetchTweetsViaTwitterAPIio(username, cursor = null) {
+  if (!TWITTERAPI_IO_KEY) {
+    throw new Error('TwitterAPI.io API key not configured')
+  }
+
+  const url = new URL('https://api.twitterapi.io/twitter/user/last_tweets')
+  url.searchParams.set('userName', username)
+  if (cursor) {
+    url.searchParams.set('cursor', cursor)
+  }
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'X-API-Key': TWITTERAPI_IO_KEY
+    }
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`TwitterAPI.io error: ${response.status} - ${error}`)
+  }
+
+  const data = await response.json()
+
+  // Handle nested response structure
+  const tweetsData = data.data?.tweets || data.tweets || []
+  const nextCursor = data.next_cursor || data.data?.next_cursor || null
+  console.log(`[TwitterAPI.io] Fetched ${tweetsData.length} tweets from @${username}${cursor ? ' (with cursor)' : ''}`)
+
+  // Transform to match our expected format
+  const tweets = tweetsData.map(tweet => ({
+    id: tweet.id || tweet.tweetId,
+    text: tweet.text || tweet.full_text,
+    created_at: tweet.createdAt || tweet.created_at,
+    author_id: tweet.author?.id || tweet.user_id,
+    author_name: tweet.author?.userName || username
+  }))
+
+  return { tweets, nextCursor }
+}
+
+/**
+ * Fetch historical tweets with pagination (up to 3 months)
+ * @param {string} username - Twitter username
+ * @param {number} maxTweets - Maximum tweets to fetch
+ * @param {number} maxAgeMonths - Maximum age in months (stop if older)
+ */
+async function fetchHistoricalTweets(username, maxTweets = 1000, maxAgeMonths = 3) {
+  const allTweets = []
+  let cursor = null
+  const cutoffDate = new Date()
+  cutoffDate.setMonth(cutoffDate.getMonth() - maxAgeMonths)
+  let pageCount = 0
+  const maxPages = 50 // Safety limit
+
+  console.log(`[TwitterAPI.io] Starting historical fetch for @${username}, max ${maxTweets} tweets, cutoff: ${cutoffDate.toISOString()}`)
+
+  while (allTweets.length < maxTweets && pageCount < maxPages) {
+    try {
+      const { tweets, nextCursor } = await fetchTweetsViaTwitterAPIio(username, cursor)
+      pageCount++
+
+      if (tweets.length === 0) {
+        console.log(`[TwitterAPI.io] No more tweets at page ${pageCount}`)
+        break
+      }
+
+      // Filter tweets older than cutoff
+      let hitCutoff = false
+      for (const tweet of tweets) {
+        const tweetDate = new Date(tweet.created_at)
+        if (tweetDate < cutoffDate) {
+          console.log(`[TwitterAPI.io] Hit cutoff date at page ${pageCount}, tweet date: ${tweetDate.toISOString()}`)
+          hitCutoff = true
+          break
+        }
+        // Avoid duplicates
+        if (!allTweets.find(t => t.id === tweet.id)) {
+          allTweets.push(tweet)
+        }
+      }
+
+      if (hitCutoff || !nextCursor) {
+        break
+      }
+
+      cursor = nextCursor
+
+      // Small delay between pages to be nice to the API
+      await new Promise(r => setTimeout(r, 300))
+    } catch (err) {
+      console.error(`[TwitterAPI.io] Error at page ${pageCount}:`, err.message)
+      break
+    }
+  }
+
+  console.log(`[TwitterAPI.io] Historical fetch complete: ${allTweets.length} tweets from ${pageCount} pages`)
+  return allTweets
+}
+
+/**
+ * Fetch tweets using official Twitter API v2
+ */
+async function fetchTweetsViaOfficialAPI(username, maxResults) {
+  const token = await getTwitterBearerToken()
+  const userId = await getTwitterUserId(username)
+
+  if (!userId) {
+    throw new Error('User not found')
+  }
+
+  const url = new URL(`https://api.twitter.com/2/users/${userId}/tweets`)
+  url.searchParams.set('max_results', maxResults)
+  url.searchParams.set('tweet.fields', 'created_at,text,author_id')
+
+  const response = await fetch(url.toString(), {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Twitter API error: ${response.status} - ${error}`)
+  }
+
+  const data = await response.json()
+  console.log(`[Twitter Official] Fetched ${data.data?.length || 0} tweets from @${username}`)
+  return data.data || []
+}
+
+// GET /api/twitter/user/:username/tweets - Fetch recent tweets
+app.get('/api/twitter/user/:username/tweets', async (req, res) => {
+  try {
+    const username = req.params.username.replace('@', '')
+    const maxResults = Math.max(5, Math.min(parseInt(req.query.max_results) || 10, 100))
+
+    let tweets = []
+    let source = 'unknown'
+
+    // Try TwitterAPI.io first (more reliable, no rate limits)
+    if (TWITTERAPI_IO_KEY) {
+      try {
+        const result = await fetchTweetsViaTwitterAPIio(username)
+        tweets = result.tweets || []
+        source = 'twitterapi.io'
+      } catch (err) {
+        console.warn('[Twitter] TwitterAPI.io failed:', err.message)
+      }
+    }
+
+    // Fallback to official Twitter API
+    if (tweets.length === 0) {
+      try {
+        tweets = await fetchTweetsViaOfficialAPI(username, maxResults)
+        source = 'twitter-official'
+      } catch (err) {
+        console.error('[Twitter] Official API failed:', err.message)
+        throw err
+      }
+    }
+
+    res.json({
+      success: true,
+      username,
+      source,
+      data: tweets,
+      timestamp: Date.now()
+    })
+  } catch (error) {
+    console.error('[Twitter] Error:', error.message)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// GET /api/twitter/user/:username/history - Fetch historical tweets (3 months)
+app.get('/api/twitter/user/:username/history', async (req, res) => {
+  try {
+    const username = req.params.username.replace('@', '')
+    const maxTweets = Math.min(parseInt(req.query.max_tweets) || 500, 2000)
+    const months = Math.min(parseInt(req.query.months) || 3, 6)
+
+    if (!TWITTERAPI_IO_KEY) {
+      return res.status(400).json({
+        success: false,
+        error: 'TwitterAPI.io API key required for historical data'
+      })
+    }
+
+    const tweets = await fetchHistoricalTweets(username, maxTweets, months)
+
+    res.json({
+      success: true,
+      username,
+      source: 'twitterapi.io',
+      data: tweets,
+      count: tweets.length,
+      months,
+      timestamp: Date.now()
+    })
+  } catch (error) {
+    console.error('[Twitter] History error:', error.message)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// GET /api/twitter/user/:username - Get user info
+app.get('/api/twitter/user/:username', async (req, res) => {
+  try {
+    const username = req.params.username.replace('@', '')
+    const token = await getTwitterBearerToken()
+
+    const response = await fetch(
+      `https://api.twitter.com/2/users/by/username/${username}?user.fields=profile_image_url,description,public_metrics`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      }
+    )
+
+    if (!response.ok) {
+      const error = await response.text()
+      throw new Error(`Twitter API error: ${response.status} - ${error}`)
+    }
+
+    const data = await response.json()
+    res.json({
+      success: true,
+      user: data.data,
+      timestamp: Date.now()
+    })
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// GET /api/twitter/status - Check Twitter API status
+app.get('/api/twitter/status', (req, res) => {
+  res.json({
+    success: true,
+    configured: !!(TWITTERAPI_IO_KEY || (TWITTER_API_KEY && TWITTER_API_KEY_SECRET) || TWITTER_BEARER_TOKEN),
+    twitterApiIo: !!TWITTERAPI_IO_KEY,
+    officialApi: !!(TWITTER_BEARER_TOKEN || (TWITTER_API_KEY && TWITTER_API_KEY_SECRET)),
+    primarySource: TWITTERAPI_IO_KEY ? 'twitterapi.io' : 'twitter-official',
+    timestamp: Date.now()
+  })
+})
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({
     success: true,
     service: 'Yahoo Finance & EODHD Proxy',
     eodhd: !!EODHD_API_KEY,
+    twitter: !!(TWITTER_API_KEY && TWITTER_API_KEY_SECRET),
     timestamp: Date.now(),
   })
 })
@@ -715,4 +1060,8 @@ app.listen(PORT, () => {
   console.log(`  GET /api/unicorn/wasp/:symbol     ${EODHD_API_KEY ? '(configured)' : '(not configured)'}`)
   console.log(`  GET /api/unicorn/wasp/:symbol/history`)
   console.log('  GET /api/unicorn/status')
+  console.log('[Server] Twitter API endpoints:')
+  console.log(`  GET /api/twitter/user/:username/tweets  ${TWITTER_API_KEY ? '(configured)' : '(not configured)'}`)
+  console.log('  GET /api/twitter/user/:username')
+  console.log('  GET /api/twitter/status')
 })

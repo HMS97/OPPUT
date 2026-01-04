@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPPUT - Follow Trade</title>
+  <link rel="stylesheet" href="../shared/sidebar.css">
+  <link rel="stylesheet" href="../shared/app-layout.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="has-sidebar">
+  <!-- Twitter-style Header -->
+  <header class="follow-header">
+    <div class="header-left">
+      <div class="twitter-brand">
+        <span class="x-logo">X</span>
+        <span class="brand-title">Follow Trade</span>
+      </div>
+    </div>
+    <div class="header-center">
+      <div class="following-badge" id="followingBadge">
+        <span class="following-label">Following</span>
+        <input type="text" id="usernameInput" class="username-input" value="StockOptions888" placeholder="username">
+        <span class="follower-count" id="followerCount"></span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-indicator" id="statusIndicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Offline</span>
+      </div>
+      <button class="monitor-btn" id="monitorBtn">
+        <span class="btn-icon">▶</span>
+        <span class="btn-text">Start</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="follow-container">
+    <!-- Left Column: Latest Signal + Tweet Feed -->
+    <div class="feed-column">
+      <!-- Latest Signal Card (Hero) -->
+      <section class="latest-signal-card" id="latestSignalCard">
+        <div class="signal-waiting" id="signalWaiting">
+          <div class="waiting-icon">
+            <svg viewBox="0 0 24 24" width="48" height="48">
+              <path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+          </div>
+          <div class="waiting-text">Waiting for signals from <strong>@<span id="waitingUsername">StockOptions888</span></strong></div>
+          <div class="waiting-hint">Click "Start" to begin monitoring</div>
+        </div>
+        <div class="signal-display" id="signalDisplay" style="display:none;">
+          <div class="signal-header">
+            <span class="signal-time" id="signalTime">--:--</span>
+            <span class="signal-source">@<span id="signalUsername">StockOptions888</span></span>
+          </div>
+          <div class="signal-body">
+            <div class="signal-direction" id="signalDirection">--</div>
+            <div class="signal-details">
+              <div class="signal-symbol" id="signalSymbol">---</div>
+              <div class="signal-strike">$<span id="signalStrike">---</span></div>
+              <div class="signal-expiry" id="signalExpiry">--/--</div>
+            </div>
+            <div class="signal-price" id="signalPrice">@ $--</div>
+          </div>
+          <div class="signal-confidence">
+            <div class="confidence-bar">
+              <div class="confidence-fill" id="confidenceFill"></div>
+            </div>
+            <span class="confidence-label" id="confidenceLabel">--% confidence</span>
+          </div>
+          <div class="signal-actions">
+            <button class="action-btn execute-btn" id="executeBtn">Execute Now</button>
+            <button class="action-btn skip-btn" id="skipBtn">Skip</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tweet Feed -->
+      <section class="tweet-feed-section">
+        <div class="section-header">
+          <h3>Tweet Feed</h3>
+          <div class="header-actions">
+            <button class="load-history-btn" id="loadHistoryBtn" title="Load 3 months of tweets">📥 Load 3 Months</button>
+            <button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>
+          </div>
+        </div>
+        <div class="tweet-list" id="tweetList">
+          <div class="tweet-empty">
+            <p>No tweets yet</p>
+            <p class="hint">Click "Load 3 Months" to fetch historical tweets</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right Column: Stats + Executed Trades + Settings -->
+    <div class="info-column">
+      <!-- Performance Stats -->
+      <section class="stats-section">
+        <div class="section-header">
+          <h3>Performance</h3>
+        </div>
+        <div class="stats-row">
+          <div class="stat-item">
+            <div class="stat-number" id="statSignals">0</div>
+            <div class="stat-name">Signals</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" id="statExecuted">0</div>
+            <div class="stat-name">Executed</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-number" id="statWinRate">--%</div>
+            <div class="stat-name">Win Rate</div>
+          </div>
+          <div class="stat-item pnl">
+            <div class="stat-number" id="statPnL">$0</div>
+            <div class="stat-name">P&L</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings -->
+      <section class="settings-section">
+        <div class="section-header">
+          <h3>Settings</h3>
+        </div>
+        <div class="settings-grid">
+          <div class="setting-item">
+            <label>Auto-Execute</label>
+            <button class="toggle-btn active" id="autoExecuteToggle">
+              <span class="toggle-status">ON</span>
+            </button>
+          </div>
+          <div class="setting-item">
+            <label>Min Confidence</label>
+            <select id="minConfidence" class="setting-select">
+              <option value="50">50%</option>
+              <option value="60">60%</option>
+              <option value="70" selected>70%</option>
+              <option value="80">80%</option>
+              <option value="90">90%</option>
+            </select>
+          </div>
+          <div class="setting-item">
+            <label>Robinhood</label>
+            <a href="../trading/" class="link-btn" id="rhLink">
+              <span class="rh-status" id="rhStatus">Connect</span>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <!-- Executed Trades -->
+      <section class="trades-section">
+        <div class="section-header">
+          <h3>Executed Trades</h3>
+          <button class="clear-btn" id="clearTradesBtn">Clear</button>
+        </div>
+        <div class="trades-list" id="tradesList">
+          <div class="trades-empty">No trades executed yet</div>
+        </div>
+      </section>
+
+      <!-- Activity Log (Collapsible) -->
+      <section class="log-section">
+        <div class="section-header collapsible" id="logHeader">
+          <h3>Activity Log</h3>
+          <span class="collapse-icon">▼</span>
+        </div>
+        <div class="log-content" id="logContent">
+          <div class="log-list" id="logList">
+            <div class="log-empty">Waiting for activity...</div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

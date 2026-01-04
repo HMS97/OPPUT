@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trading Strategies Guide</title>
+  <script type="module" crossorigin src="../assets/strategies-BI_jZPdm.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/auth-service-C1sNBFma.js">
+  <link rel="modulepreload" crossorigin href="../assets/sidebar-QfNGueo9.js">
+  <link rel="stylesheet" crossorigin href="../assets/sidebar-CSSqWV9s.css">
+  <link rel="stylesheet" crossorigin href="../assets/strategies-BVeqdATz.css">
+</head>
+<body class="has-sidebar">
+  <header class="header">
+    <h1>Trading Strategies Guide</h1>
+  </header>
+
+  <main class="main-container">
+    <!-- Introduction -->
+    <section class="intro-section glass-panel">
+      <h2>OPPUT Backtesting Strategies</h2>
+      <p>This guide explains the signal sources and exit strategies available in the OPPUT backtesting engine. Each strategy has unique characteristics suited for different market conditions.</p>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <div class="strategy-nav">
+      <button class="nav-tab active" data-section="signal-sources">Signal Sources</button>
+      <button class="nav-tab" data-section="exit-strategies">Exit Strategies</button>
+      <button class="nav-tab" data-section="presets">Recommended Presets</button>
+    </div>
+
+    <!-- Signal Sources Section -->
+    <section id="signal-sources" class="content-section">
+      <h2 class="section-title">Signal Sources</h2>
+      <p class="section-desc">Signal sources determine when to enter trades. Choose based on your preferred analysis method.</p>
+
+      <!-- Pattern Detector -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">📊</span>
+          <h3>Pattern Detector</h3>
+          <span class="strategy-badge technical">Technical Analysis</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Uses classic technical indicators to detect bullish/bearish patterns. Best for trend-following and reversal trading.</p>
+
+          <div class="strategy-details">
+            <h4>Indicators Used</h4>
+            <ul>
+              <li><strong>RSI (14)</strong> - Oversold (&lt;30) for CALL, Overbought (&gt;70) for PUT</li>
+              <li><strong>Bollinger Bands (20, 2)</strong> - Price touches lower band = CALL, upper band = PUT</li>
+              <li><strong>EMA Crossover (8, 21)</strong> - Fast EMA crosses above slow = CALL, below = PUT</li>
+              <li><strong>MACD (12, 26, 9)</strong> - Histogram divergence confirms direction</li>
+            </ul>
+
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Lookback Candles</td><td>50</td><td>Number of candles to analyze for patterns</td></tr>
+              <tr><td>Min Strength</td><td>30%</td><td>Minimum signal strength to trigger trade</td></tr>
+            </table>
+
+            <h4>Best For</h4>
+            <p>Trending markets, swing trading, 1H-4H timeframes</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Daily Signal -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">📅</span>
+          <h3>Daily Signal</h3>
+          <span class="strategy-badge confluence">Multi-Indicator</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Combines multiple indicators into a confluence score. Higher scores mean stronger agreement between indicators.</p>
+
+          <div class="strategy-details">
+            <h4>Confluence Factors</h4>
+            <ul>
+              <li><strong>Trend Direction</strong> - EMA stack alignment</li>
+              <li><strong>Momentum</strong> - RSI and MACD confirmation</li>
+              <li><strong>Volatility</strong> - Bollinger Band position</li>
+              <li><strong>Volume</strong> - Volume confirmation of moves</li>
+            </ul>
+
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Min Confluence Score</td><td>60</td><td>Minimum score (0-100) to trigger trade</td></tr>
+            </table>
+
+            <h4>Best For</h4>
+            <p>Daily timeframe, position trading, high-probability setups</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- OI-Scalp (WASP Mean Reversion) -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">⚡</span>
+          <h3>OI-Scalp (WASP Mean Reversion)</h3>
+          <span class="strategy-badge primary">Primary Strategy</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Uses Weighted Average Strike Price (WASP) from options open interest data for mean reversion signals. <strong>This is the primary strategy capable of 200%+ monthly returns.</strong></p>
+
+          <div class="strategy-details">
+            <h4>How It Works</h4>
+            <ul>
+              <li><strong>WASP</strong> - Calculated from options OI × strike prices (institutional positioning)</li>
+              <li><strong>Mean Reversion</strong> - Price deviates from WASP → expect reversion</li>
+              <li><strong>CALL</strong> - Price is X% below WASP (buy the dip)</li>
+              <li><strong>PUT</strong> - Price is X% above WASP (sell the rip)</li>
+            </ul>
+
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>WASP Period (SMA)</td><td>15</td><td>Smoothing period for WASP calculation</td></tr>
+              <tr><td>Entry Deviation %</td><td>0.3%</td><td>How far from WASP to trigger entry</td></tr>
+              <tr><td>RSI/ADX/BB Filters</td><td>Off</td><td>Additional confirmation filters (can reduce signals)</td></tr>
+              <tr><td>Week 3-4 Only</td><td>Off</td><td>Trade only during high OI deviation weeks</td></tr>
+            </table>
+
+            <h4>Optimized Settings (200% Preset)</h4>
+            <table class="config-table highlight">
+              <tr><th>Parameter</th><th>Value</th></tr>
+              <tr><td>Timeframe</td><td>5m</td></tr>
+              <tr><td>WASP Period</td><td>5</td></tr>
+              <tr><td>Entry Deviation</td><td>0.08%</td></tr>
+              <tr><td>Filters</td><td>DISABLED</td></tr>
+              <tr><td>Leverage</td><td>8x</td></tr>
+              <tr><td>Exit</td><td>Target-Stop (0.2%/0.1%)</td></tr>
+            </table>
+
+            <h4>Best For</h4>
+            <p>Scalping, 5m-15m timeframes, high-frequency trading</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- OI-Trend -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">📈</span>
+          <h3>OI-Trend</h3>
+          <span class="strategy-badge trend">Trend Following</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Unlike mean reversion, this trades WITH the trend. When price breaks above/below WASP with momentum, it follows the breakout.</p>
+
+          <div class="strategy-details">
+            <h4>How It Works</h4>
+            <ul>
+              <li><strong>Breakout Detection</strong> - Price crosses WASP with momentum</li>
+              <li><strong>CALL</strong> - Price breaks above WASP + momentum up</li>
+              <li><strong>PUT</strong> - Price breaks below WASP + momentum down</li>
+              <li><strong>Momentum</strong> - Consecutive bars in same direction</li>
+            </ul>
+
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>WASP Period</td><td>15</td><td>Smoothing period for WASP</td></tr>
+              <tr><td>Breakout Threshold %</td><td>0.3%</td><td>Minimum deviation to confirm breakout</td></tr>
+              <tr><td>Momentum Bars</td><td>3</td><td>Consecutive bars needed to confirm momentum</td></tr>
+            </table>
+
+            <h4>Best For</h4>
+            <p>Trending markets, 1H-4H timeframes, larger moves</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- OI-Multi-TF -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">🔍</span>
+          <h3>OI-Multi-TF (Multi-Timeframe)</h3>
+          <span class="strategy-badge advanced">Advanced</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Uses higher timeframe (4H) for directional bias and lower timeframe (5m) for precise entries. Only takes trades aligned with the trend.</p>
+
+          <div class="strategy-details">
+            <h4>How It Works</h4>
+            <ul>
+              <li><strong>Bias (4H)</strong> - Determines if we're bullish or bearish</li>
+              <li><strong>Entry (5m)</strong> - Mean reversion signals on lower TF</li>
+              <li><strong>Filter</strong> - Only take 5m CALL if 4H is bullish</li>
+              <li><strong>Filter</strong> - Only take 5m PUT if 4H is bearish</li>
+            </ul>
+
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Entry Deviation %</td><td>0.2%</td><td>Deviation for entry signals</td></tr>
+              <tr><td>Bias Threshold %</td><td>0.1%</td><td>Minimum deviation to determine bias</td></tr>
+            </table>
+
+            <h4>Best For</h4>
+            <p>Filtered high-probability entries, reduced noise, swing trading</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- IV Signal -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">📉</span>
+          <h3>IV Signal</h3>
+          <span class="strategy-badge volatility">Volatility</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Uses Implied Volatility data to time entries. Buy when IV is low (cheap options), sell when IV is high (expensive options).</p>
+
+          <div class="strategy-details">
+            <h4>Strategies</h4>
+            <ul>
+              <li><strong>IV Percentile</strong> - Compare current IV to historical range</li>
+              <li><strong>IV Skew</strong> - Put/Call IV ratio indicates directional bias</li>
+              <li><strong>IV vs HV</strong> - Compare implied to historical volatility</li>
+            </ul>
+
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Strategy</td><td>Percentile</td><td>Which IV metric to use</td></tr>
+              <tr><td>Lookback Days</td><td>20</td><td>Historical period for comparison</td></tr>
+            </table>
+
+            <h4>Data Source</h4>
+            <p>DoltHub options database (2019-present)</p>
+
+            <h4>Best For</h4>
+            <p>Volatility trading, options premium selling, daily timeframe</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Exit Strategies Section -->
+    <section id="exit-strategies" class="content-section" style="display: none;">
+      <h2 class="section-title">Exit Strategies</h2>
+      <p class="section-desc">Exit strategies determine when to close trades. Choose based on your risk tolerance and market conditions.</p>
+
+      <!-- Fixed Bars -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">⏱️</span>
+          <h3>Fixed Holding Period</h3>
+          <span class="strategy-badge simple">Simple</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Exit after a fixed number of bars regardless of profit/loss. Simple and removes emotion from exits.</p>
+
+          <div class="strategy-details">
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Hold for N bars</td><td>10</td><td>Number of candles to hold before exit</td></tr>
+            </table>
+
+            <h4>Pros</h4>
+            <ul>
+              <li>Simple, no parameters to optimize</li>
+              <li>Removes emotional decision-making</li>
+              <li>Good for testing signal quality</li>
+            </ul>
+
+            <h4>Cons</h4>
+            <ul>
+              <li>May exit too early (missing profits)</li>
+              <li>May exit too late (giving back gains)</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- Opposite Signal -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">🔄</span>
+          <h3>Opposite Signal</h3>
+          <span class="strategy-badge adaptive">Adaptive</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Exit when the signal source generates an opposite signal. Lets the market tell you when to exit.</p>
+
+          <div class="strategy-details">
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Min Opposite Strength</td><td>50%</td><td>Minimum strength of opposite signal to trigger exit</td></tr>
+            </table>
+
+            <h4>Pros</h4>
+            <ul>
+              <li>Adapts to market conditions</li>
+              <li>Can capture extended moves</li>
+              <li>Uses same logic as entries</li>
+            </ul>
+
+            <h4>Cons</h4>
+            <ul>
+              <li>May stay in losing trades too long</li>
+              <li>Depends on signal source quality</li>
+            </ul>
+          </div>
+        </div>
+      </article>
+
+      <!-- Target-Stop -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">🎯</span>
+          <h3>Target / Stop Loss</h3>
+          <span class="strategy-badge recommended">Recommended</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Exit at a fixed profit target or stop loss. <strong>Most reliable for mean reversion strategies.</strong></p>
+
+          <div class="strategy-details">
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Target %</td><td>1.0%</td><td>Profit target (exit when price moves X% in favor)</td></tr>
+              <tr><td>Stop Loss %</td><td>0.5%</td><td>Stop loss (exit when price moves X% against)</td></tr>
+            </table>
+
+            <h4>Risk:Reward Examples</h4>
+            <table class="config-table">
+              <tr><th>Target</th><th>Stop</th><th>R:R</th><th>Min Win Rate for Profit</th></tr>
+              <tr><td>0.2%</td><td>0.1%</td><td>2:1</td><td>34%</td></tr>
+              <tr><td>0.3%</td><td>0.5%</td><td>0.6:1</td><td>63%</td></tr>
+              <tr><td>1.0%</td><td>0.5%</td><td>2:1</td><td>34%</td></tr>
+            </table>
+
+            <h4>Optimized Settings (For OI-Scalp)</h4>
+            <table class="config-table highlight">
+              <tr><td>Target</td><td>0.2%</td></tr>
+              <tr><td>Stop</td><td>0.1%</td></tr>
+              <tr><td>R:R</td><td>2:1</td></tr>
+            </table>
+
+            <h4>Best For</h4>
+            <p>Mean reversion, scalping, defined risk trading</p>
+          </div>
+        </div>
+      </article>
+
+      <!-- Butterfly -->
+      <article class="strategy-card glass-panel">
+        <div class="strategy-header">
+          <span class="strategy-icon">🦋</span>
+          <h3>Butterfly Spread (8:1 R:R)</h3>
+          <span class="strategy-badge advanced">Advanced</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Simulates butterfly spread options payoff. Maximum profit if price ends at target (WASP), maximum loss outside wings.</p>
+
+          <div class="strategy-details">
+            <h4>How It Works</h4>
+            <ul>
+              <li><strong>Max Profit (8x)</strong> - Price ends exactly at target strike</li>
+              <li><strong>Breakeven</strong> - Price within profit zone width</li>
+              <li><strong>Max Loss (-1x)</strong> - Price outside wings at expiry</li>
+              <li><strong>Time Decay</strong> - Simulated theta decay over holding period</li>
+            </ul>
+
+            <h4>Configuration</h4>
+            <table class="config-table">
+              <tr><th>Parameter</th><th>Default</th><th>Description</th></tr>
+              <tr><td>Profit Zone Width %</td><td>0.4%</td><td>Width of profit zone around target</td></tr>
+              <tr><td>Hold Period (bars)</td><td>78</td><td>Simulated option expiration (auto-scales by TF)</td></tr>
+            </table>
+
+            <h4>Payoff Profile</h4>
+            <pre class="payoff-diagram">
+     +8x |        ∧
+         |       /|\
+    Profit|      / | \
+         |     /  |  \
+      0  |----/---|---\----
+         |   /    |    \
+     -1x |__/_____|_____\__
+            Wings Target Wings
+            </pre>
+
+            <h4>Best For</h4>
+            <p>High-conviction WASP targets, low volatility periods, defined risk</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <!-- Presets Section -->
+    <section id="presets" class="content-section" style="display: none;">
+      <h2 class="section-title">Recommended Presets</h2>
+      <p class="section-desc">Pre-configured settings for different trading styles. Click to apply in the backtester.</p>
+
+      <!-- High Frequency Scalp Preset -->
+      <article class="strategy-card glass-panel preset-card">
+        <div class="strategy-header">
+          <span class="strategy-icon">🚀</span>
+          <h3>High-Frequency Scalp (OI-Scalp 8x)</h3>
+          <span class="strategy-badge fire">High Returns</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Aggressive scalping strategy optimized for maximum returns with 8x options leverage. Requires discipline and accepts higher drawdowns.</p>
+
+          <div class="preset-config">
+            <div class="preset-row">
+              <span class="preset-label">Signal Source</span>
+              <span class="preset-value">OI-Scalp</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Timeframe</span>
+              <span class="preset-value">5 minutes</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">WASP Period</span>
+              <span class="preset-value">5</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Entry Deviation</span>
+              <span class="preset-value">0.08%</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Exit Strategy</span>
+              <span class="preset-value">Target-Stop (0.2% / 0.1%)</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Leverage</span>
+              <span class="preset-value">8x (Butterfly equivalent)</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Filters</span>
+              <span class="preset-value">DISABLED</span>
+            </div>
+          </div>
+
+          <div class="preset-stats">
+            <div class="stat">
+              <span class="stat-value positive">~40%</span>
+              <span class="stat-label">Monthly Return</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">~43%</span>
+              <span class="stat-label">Win Rate</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value negative">&lt;10%</span>
+              <span class="stat-label">Max Drawdown</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">~150+</span>
+              <span class="stat-label">Trades/Month</span>
+            </div>
+          </div>
+
+          <a href="../backtest/?preset=scalp" class="preset-apply-btn">Apply in Backtester →</a>
+        </div>
+      </article>
+
+      <!-- Conservative Preset -->
+      <article class="strategy-card glass-panel preset-card">
+        <div class="strategy-header">
+          <span class="strategy-icon">🛡️</span>
+          <h3>Conservative (Pattern + Fixed Bars)</h3>
+          <span class="strategy-badge safe">Low Risk</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Lower risk strategy using traditional technical analysis. Suitable for beginners or conservative traders.</p>
+
+          <div class="preset-config">
+            <div class="preset-row">
+              <span class="preset-label">Signal Source</span>
+              <span class="preset-value">Pattern Detector</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Timeframe</span>
+              <span class="preset-value">1 hour</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Min Strength</span>
+              <span class="preset-value">50%</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Exit Strategy</span>
+              <span class="preset-value">Fixed Bars (10)</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Leverage</span>
+              <span class="preset-value">1x (Stock)</span>
+            </div>
+          </div>
+
+          <div class="preset-stats">
+            <div class="stat">
+              <span class="stat-value">~5-10%</span>
+              <span class="stat-label">Monthly Return</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">~50%</span>
+              <span class="stat-label">Win Rate</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value negative">&lt;5%</span>
+              <span class="stat-label">Max Drawdown</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">~20-30</span>
+              <span class="stat-label">Trades/Month</span>
+            </div>
+          </div>
+
+          <a href="../backtest/?preset=conservative" class="preset-apply-btn">Apply in Backtester →</a>
+        </div>
+      </article>
+
+      <!-- Swing Trading Preset -->
+      <article class="strategy-card glass-panel preset-card">
+        <div class="strategy-header">
+          <span class="strategy-icon">🌊</span>
+          <h3>Swing Trading (OI-Trend)</h3>
+          <span class="strategy-badge trend">Trend Following</span>
+        </div>
+        <div class="strategy-content">
+          <p class="strategy-desc">Trend-following strategy for larger moves. Fewer trades but potentially bigger winners.</p>
+
+          <div class="preset-config">
+            <div class="preset-row">
+              <span class="preset-label">Signal Source</span>
+              <span class="preset-value">OI-Trend</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Timeframe</span>
+              <span class="preset-value">1 hour</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Breakout Threshold</span>
+              <span class="preset-value">0.3%</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Exit Strategy</span>
+              <span class="preset-value">Target-Stop (1.0% / 0.5%)</span>
+            </div>
+            <div class="preset-row">
+              <span class="preset-label">Leverage</span>
+              <span class="preset-value">5x (Options)</span>
+            </div>
+          </div>
+
+          <div class="preset-stats">
+            <div class="stat">
+              <span class="stat-value">~15-25%</span>
+              <span class="stat-label">Monthly Return</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">~45%</span>
+              <span class="stat-label">Win Rate</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value negative">&lt;8%</span>
+              <span class="stat-label">Max Drawdown</span>
+            </div>
+            <div class="stat">
+              <span class="stat-value">~40-60</span>
+              <span class="stat-label">Trades/Month</span>
+            </div>
+          </div>
+
+          <a href="../backtest/?preset=swing" class="preset-apply-btn">Apply in Backtester →</a>
+        </div>
+      </article>
+    </section>
+  </main>
+
+</body>
+</html>

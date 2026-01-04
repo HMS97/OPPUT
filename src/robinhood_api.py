@@ -67,6 +67,8 @@ class LoginRequest(BaseModel):
     username: str
     password: str
     mfa_code: Optional[str] = None
+    challenge_id: Optional[str] = None
+    challenge_code: Optional[str] = None
 
 
 # ==================== HEALTH CHECK ====================
@@ -91,25 +93,232 @@ async def authenticate():
 
 @app.post("/login")
 async def login(request: LoginRequest):
-    """Login with provided credentials and MFA code"""
+    """Login with provided credentials and MFA code - handles verification challenges"""
+    import secrets
+    from robin_stocks.robinhood.helper import request_post, request_get, update_session, set_login_state
+    from robin_stocks.robinhood.urls import login_url
+    import pickle
+    import os
+
+    def generate_device_token():
+        rands = [secrets.randbelow(256) for _ in range(16)]
+        hexa = [str(hex(i + 256)).lstrip("0x")[1:] for i in range(256)]
+        token = ""
+        for i, r in enumerate(rands):
+            token += hexa[r]
+            if i in [3, 5, 7, 9]:
+                token += "-"
+        return token
+
     try:
-        import robin_stocks.robinhood as rh
+        # Use stored device token if responding to challenge, otherwise generate new one
+        device_token = request.challenge_id.split('|')[1] if request.challenge_id and '|' in request.challenge_id else generate_device_token()
 
-        result = rh.login(
-            username=request.username,
-            password=request.password,
-            mfa_code=request.mfa_code,
-            store_session=True
-        )
+        login_payload = {
+            'client_id': 'c82SH0WZOsabOXGP2sxqcj34FxkvfnWRZBKlBjFS',
+            'expires_in': 86400,
+            'grant_type': 'password',
+            'password': request.password,
+            'scope': 'internal',
+            'username': request.username,
+            'device_token': device_token,
+            'try_passkeys': False,
+            'token_request_path': '/login',
+            'create_read_only_secondary_token': True,
+        }
 
-        if result:
+        if request.mfa_code:
+            login_payload['mfa_code'] = request.mfa_code
+
+        # If responding to a challenge verification code
+        if request.challenge_id and request.challenge_code:
+            challenge_id = request.challenge_id.split('|')[0] if '|' in request.challenge_id else request.challenge_id
+            challenge_url = f"https://api.robinhood.com/challenge/{challenge_id}/respond/"
+            challenge_payload = {"response": request.challenge_code}
+            challenge_response = request_post(url=challenge_url, payload=challenge_payload)
+
+            if not challenge_response or challenge_response.get("status") != "validated":
+                raise HTTPException(status_code=401, detail="Invalid verification code. Please try again.")
+
+            # Challenge validated, now complete the login
+            data = request_post(login_url(), login_payload)
+            if data and 'access_token' in data:
+                token = '{0} {1}'.format(data['token_type'], data['access_token'])
+                update_session('Authorization', token)
+                set_login_state(True)
+
+                # Save session
+                home_dir = os.path.expanduser("~")
+                data_dir = os.path.join(home_dir, ".tokens")
+                if not os.path.exists(data_dir):
+                    os.makedirs(data_dir)
+                pickle_path = os.path.join(data_dir, "robinhood.pickle")
+                with open(pickle_path, 'wb') as f:
+                    pickle.dump({
+                        'token_type': data['token_type'],
+                        'access_token': data['access_token'],
+                        'refresh_token': data['refresh_token'],
+                        'device_token': device_token
+                    }, f)
+
+                service.is_authenticated = True
+                service.username = request.username
+                return {"status": "authenticated", "username": request.username}
+            raise HTTPException(status_code=401, detail="Login failed after verification")
+
+        # Initial login attempt
+        data = request_post(login_url(), login_payload)
+
+        if not data:
+            raise HTTPException(status_code=401, detail="Login failed - no response from Robinhood")
+
+        # Check if verification workflow is required
+        if 'verification_workflow' in data:
+            workflow_id = data['verification_workflow']['id']
+
+            # Start the verification process
+            pathfinder_url = "https://api.robinhood.com/pathfinder/user_machine/"
+            machine_payload = {'device_id': device_token, 'flow': 'suv', 'input': {'workflow_id': workflow_id}}
+            machine_data = request_post(url=pathfinder_url, payload=machine_payload, json=True)
+
+            if machine_data and "id" in machine_data:
+                machine_id = machine_data["id"]
+                inquiries_url = f"https://api.robinhood.com/pathfinder/inquiries/{machine_id}/user_view/"
+
+                # Poll briefly to get challenge info
+                import time
+                for _ in range(3):
+                    time.sleep(2)
+                    inquiries_response = request_get(inquiries_url)
+
+                    if inquiries_response and "context" in inquiries_response:
+                        if "sheriff_challenge" in inquiries_response["context"]:
+                            challenge = inquiries_response["context"]["sheriff_challenge"]
+                            challenge_type = challenge.get("type", "sms")
+                            challenge_id = challenge.get("id")
+
+                            if challenge_type == "prompt":
+                                # App-based verification required
+                                return {
+                                    "status": "app_approval_required",
+                                    "challenge_id": f"{challenge_id}|{device_token}",
+                                    "challenge_type": "app",
+                                    "message": "Please approve the login in your Robinhood app, then click 'Continue'"
+                                }
+                            elif challenge_type in ["sms", "email"]:
+                                return {
+                                    "status": "challenge_required",
+                                    "challenge_id": f"{challenge_id}|{device_token}",
+                                    "challenge_type": challenge_type,
+                                    "message": f"Enter the verification code sent via {challenge_type}"
+                                }
+
+            # Fallback - return generic challenge required
+            return {
+                "status": "challenge_required",
+                "challenge_id": f"{workflow_id}|{device_token}",
+                "challenge_type": "unknown",
+                "message": "Verification required. Check your phone/email for a code or approve in the Robinhood app."
+            }
+
+        # Direct login success
+        if 'access_token' in data:
+            token = '{0} {1}'.format(data['token_type'], data['access_token'])
+            update_session('Authorization', token)
+            set_login_state(True)
+
+            # Save session
+            home_dir = os.path.expanduser("~")
+            data_dir = os.path.join(home_dir, ".tokens")
+            if not os.path.exists(data_dir):
+                os.makedirs(data_dir)
+            pickle_path = os.path.join(data_dir, "robinhood.pickle")
+            with open(pickle_path, 'wb') as f:
+                pickle.dump({
+                    'token_type': data['token_type'],
+                    'access_token': data['access_token'],
+                    'refresh_token': data['refresh_token'],
+                    'device_token': device_token
+                }, f)
+
             service.is_authenticated = True
             service.username = request.username
             return {"status": "authenticated", "username": request.username}
-        else:
-            raise HTTPException(status_code=401, detail="Invalid credentials or MFA code")
+
+        raise HTTPException(status_code=401, detail="Login failed - unexpected response")
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
+
+
+class AppApprovalRequest(BaseModel):
+    challenge_id: str
+    username: str
+    password: str
+
+
+@app.post("/login/check-app-approval")
+async def check_app_approval(request: AppApprovalRequest):
+    """Check if app-based verification has been approved"""
+    from robin_stocks.robinhood.helper import request_get, request_post, update_session, set_login_state
+    from robin_stocks.robinhood.urls import login_url
+    import pickle
+    import os
+
+    try:
+        parts = request.challenge_id.split('|')
+        challenge_id = parts[0]
+        device_token = parts[1] if len(parts) > 1 else ""
+
+        # Check the challenge status
+        prompt_url = f"https://api.robinhood.com/push/{challenge_id}/get_prompts_status/"
+        prompt_status = request_get(url=prompt_url)
+
+        if prompt_status and prompt_status.get("challenge_status") == "validated":
+            # App approval received, complete the login
+            login_payload = {
+                'client_id': 'c82SH0WZOsabOXGP2sxqcj34FxkvfnWRZBKlBjFS',
+                'expires_in': 86400,
+                'grant_type': 'password',
+                'password': request.password,
+                'scope': 'internal',
+                'username': request.username,
+                'device_token': device_token,
+                'try_passkeys': False,
+                'token_request_path': '/login',
+                'create_read_only_secondary_token': True,
+            }
+
+            data = request_post(login_url(), login_payload)
+            if data and 'access_token' in data:
+                token = '{0} {1}'.format(data['token_type'], data['access_token'])
+                update_session('Authorization', token)
+                set_login_state(True)
+
+                # Save session
+                home_dir = os.path.expanduser("~")
+                data_dir = os.path.join(home_dir, ".tokens")
+                if not os.path.exists(data_dir):
+                    os.makedirs(data_dir)
+                pickle_path = os.path.join(data_dir, "robinhood.pickle")
+                with open(pickle_path, 'wb') as f:
+                    pickle.dump({
+                        'token_type': data['token_type'],
+                        'access_token': data['access_token'],
+                        'refresh_token': data['refresh_token'],
+                        'device_token': device_token
+                    }, f)
+
+                service.is_authenticated = True
+                service.username = request.username
+                return {"status": "authenticated", "username": request.username}
+
+        return {"status": "pending", "message": "Waiting for app approval..."}
+
+    except Exception as e:
+        return {"status": "pending", "message": str(e)}
 
 
 # ==================== ACCOUNT ====================

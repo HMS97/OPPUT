@@ -385,9 +385,10 @@ export function monteCarloSimulation(trades, iterations = 1000) {
  * @param {Array} trades - Closed trades
  * @param {number} initialCapital - Starting capital
  * @param {number} positionPercent - Position size as % of capital (default 100 for full capital)
+ * @param {boolean} useDollarPnL - If true, use trade.pnl directly instead of pnlPercent calculation
  * @returns {Array} - Equity curve points
  */
-export function calculateEquityCurve(trades, initialCapital = 10000, positionPercent = 100) {
+export function calculateEquityCurve(trades, initialCapital = 10000, positionPercent = 100, useDollarPnL = false) {
   if (trades.length === 0) return []
 
   const curve = [{ time: trades[0].entryTime, equity: initialCapital, drawdown: 0 }]
@@ -403,9 +404,16 @@ export function calculateEquityCurve(trades, initialCapital = 10000, positionPer
       break
     }
 
-    // Position size as fraction of CURRENT equity (compounding)
-    const positionSize = equity * positionFraction
-    const pnlDollars = (trade.pnlPercent / 100) * positionSize
+    let pnlDollars
+    if (useDollarPnL && trade.pnl !== undefined) {
+      // Use actual dollar P&L from trade (accounts for dynamic contracts)
+      pnlDollars = trade.pnl
+    } else {
+      // Position size as fraction of CURRENT equity (compounding)
+      const positionSize = equity * positionFraction
+      pnlDollars = (trade.pnlPercent / 100) * positionSize
+    }
+
     equity += pnlDollars
 
     // FLOOR AT ZERO: Equity cannot go negative

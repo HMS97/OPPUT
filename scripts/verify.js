@@ -94,6 +94,7 @@ async function verifyBuild() {
       'dist/backtest/index.html',
       'dist/dashboard/index.html',
       'dist/spy-options/index.html',
+      'dist/strategies/index.html',
       'dist/trading/index.html'
     ];
 

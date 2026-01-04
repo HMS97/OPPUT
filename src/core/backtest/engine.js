@@ -235,9 +235,30 @@ export class BacktestEngine {
       }
     }
 
-    // Create new trade
+    // Create new trade with calculated contracts based on position sizing
     const candle = this.candles[index]
+
+    // Calculate position value
+    let positionValue
+    if (this.positionSize === 'percent') {
+      positionValue = (this.equity * this.positionPercent) / 100
+    } else {
+      positionValue = this.positionSize
+    }
+
+    // Add contracts calculation to signal (will be used by createTrade)
+    // Contracts will be calculated after we know the option price
+    signal.positionValue = positionValue
+
     const trade = createTrade(signal, candle, index)
+
+    // Calculate contracts based on option price
+    // Each contract = 100 shares, so cost = optionPrice * 100
+    const contractCost = trade.optionEntryPrice * 100
+    const calculatedContracts = Math.floor(positionValue / contractCost)
+    trade.contracts = Math.max(1, calculatedContracts)  // Minimum 1 contract
+    trade.positionValue = positionValue
+
     this.openTrades.push(trade)
 
     if (this.onTradeCallback) {
@@ -247,10 +268,18 @@ export class BacktestEngine {
 
   /**
    * Calculate P&L for a closed trade in dollar terms
+   * Uses actual contracts if available, otherwise falls back to percentage-based
    * @param {Object} trade - Closed trade
    * @returns {number} - Dollar P&L
    */
   calculateTradePnL(trade) {
+    // If trade has contracts and option prices, use actual dollar P&L
+    if (trade.contracts && trade.optionEntryPrice && trade.optionExitPrice !== null) {
+      // P&L = (exit price - entry price) * 100 shares * contracts
+      return (trade.optionExitPrice - trade.optionEntryPrice) * 100 * trade.contracts
+    }
+
+    // Fallback to percentage-based calculation
     let tradeSize
     if (this.positionSize === 'percent') {
       tradeSize = (this.initialCapital * this.positionPercent) / 100

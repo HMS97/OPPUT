@@ -5,21 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SPY Options Backtester</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script type="module" crossorigin src="../assets/backtest-_uRA2t-n.js"></script>
-  <link rel="modulepreload" crossorigin href="../assets/indicators-B1kEv_-x.js">
-  <link rel="modulepreload" crossorigin href="../assets/yahoo-CRJUk5vV.js">
-  <link rel="modulepreload" crossorigin href="../assets/detector-CRHMCVSO.js">
-  <link rel="modulepreload" crossorigin href="../assets/dailySignal-iJV5XLls.js">
-  <link rel="modulepreload" crossorigin href="../assets/oi-adapter-CJGX5dQp.js">
+  <script type="module" crossorigin src="../assets/backtest-MO0AnIi4.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/auth-service-C1sNBFma.js">
+  <link rel="modulepreload" crossorigin href="../assets/sidebar-QfNGueo9.js">
+  <link rel="modulepreload" crossorigin href="../assets/indicators-CHBeM_Fw.js">
+  <link rel="modulepreload" crossorigin href="../assets/oi-adapter-BTCh8tTH.js">
+  <link rel="modulepreload" crossorigin href="../assets/yahoo-h8dATVuC.js">
+  <link rel="modulepreload" crossorigin href="../assets/detector-Cm8zXoGm.js">
+  <link rel="modulepreload" crossorigin href="../assets/dailySignal-C5MK__xI.js">
+  <link rel="modulepreload" crossorigin href="../assets/tweet-parser-BTA1CsDn.js">
+  <link rel="stylesheet" crossorigin href="../assets/sidebar-CSSqWV9s.css">
   <link rel="stylesheet" crossorigin href="../assets/backtest-BxuxPISW.css">
 </head>
-<body>
+<body class="has-sidebar">
   <header class="header">
     <h1>SPY Options Backtester</h1>
-    <nav class="header-nav">
-      <a href="../spy-options/" class="nav-link">Options Dashboard</a>
-      <a href="../dashboard/" class="nav-link">Signal Dashboard</a>
-    </nav>
   </header>
 
   <main class="main-container">
@@ -28,7 +28,7 @@
       <div class="panel-header">
         <h2>Backtest Configuration</h2>
         <div class="header-actions">
-          <button class="btn-accent btn-sm" id="apply200Preset" title="Apply 200%+ monthly returns preset">200% Preset</button>
+          <button class="btn-accent btn-sm" id="apply200Preset" title="Apply high-frequency scalp preset (~40% monthly)">Scalp Preset</button>
           <button class="btn-secondary btn-sm" id="clearCache" title="Clear cached data">Clear Cache</button>
           <button class="btn-secondary btn-sm" id="resetConfig">Reset</button>
         </div>
@@ -45,6 +45,8 @@
             <button class="tab-btn" data-source="oi-trend">OI-Trend</button>
             <button class="tab-btn" data-source="oi-multi-tf">OI-MTF</button>
             <button class="tab-btn" data-source="iv">IV</button>
+            <button class="tab-btn" data-source="twitter" title="Backtest Twitter follow signals">Twitter</button>
+            <button class="tab-btn" data-source="twitter-sim" title="Simulated Twitter-style signals">Twitter-Sim</button>
           </div>
           <div id="sourceConfig" class="source-config">
             <!-- Source-specific config rendered here -->
@@ -207,8 +209,8 @@
                 <th>Expiry</th>
                 <th>Qty</th>
                 <th>Strength</th>
-                <th>Entry $</th>
-                <th>Exit $</th>
+                <th>Opt Entry</th>
+                <th>Opt Exit</th>
                 <th>P&L %</th>
                 <th>Bars</th>
                 <th>Exit Reason</th>

@@ -4,19 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SPY Signal Alert - PUT/CALL Dashboard with Backtesting</title>
-  <script type="module" crossorigin src="../assets/dashboard-f9_UlzqJ.js"></script>
-  <link rel="modulepreload" crossorigin href="../assets/indicators-B1kEv_-x.js">
-  <link rel="modulepreload" crossorigin href="../assets/detector-CRHMCVSO.js">
-  <link rel="modulepreload" crossorigin href="../assets/yahoo-CRJUk5vV.js">
-  <link rel="stylesheet" crossorigin href="../assets/dashboard-C5Cdifyf.css">
+  <script type="module" crossorigin src="../assets/dashboard-B1DTUH8e.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/auth-service-C1sNBFma.js">
+  <link rel="modulepreload" crossorigin href="../assets/sidebar-QfNGueo9.js">
+  <link rel="modulepreload" crossorigin href="../assets/indicators-CHBeM_Fw.js">
+  <link rel="modulepreload" crossorigin href="../assets/detector-Cm8zXoGm.js">
+  <link rel="modulepreload" crossorigin href="../assets/yahoo-h8dATVuC.js">
+  <link rel="stylesheet" crossorigin href="../assets/sidebar-CSSqWV9s.css">
+  <link rel="stylesheet" crossorigin href="../assets/dashboard-9WyqhgA0.css">
 </head>
-<body>
+<body class="has-sidebar">
   <header class="header">
     <h1>SPY Signal Dashboard (PUT/CALL)</h1>
     <div class="header-controls">
-      <a href="../backtest/" class="nav-link">Backtester</a>
-      <a href="../spy-options/" class="nav-link">Options Analysis</a>
-      <a href="../trading/" class="nav-link">Live Trading</a>
       <div class="data-toggle">
         <button class="data-toggle-btn active" id="realtimeBtn">Real-time</button>
         <button class="data-toggle-btn" id="replayBtn">Replay</button>
@@ -171,7 +171,7 @@
         </div>
       </div>
 
-      <div class="sidebar">
+      <div class="right-panel">
         <div class="card">
           <div class="card-title">All Detected Patterns</div>
           <div class="combined-patterns" id="allPatternsList">

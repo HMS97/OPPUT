@@ -1,0 +1,1005 @@
+/* Follow Trade Page - Twitter-inspired unique design */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #000000;
+  color: #e7e9ea;
+  min-height: 100vh;
+}
+
+/* ========== HEADER ========== */
+.follow-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.95);
+  border-bottom: 1px solid #2f3336;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+}
+
+.twitter-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.x-logo {
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
+}
+
+.brand-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e7e9ea;
+}
+
+.header-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.following-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: #16181c;
+  border: 1px solid #2f3336;
+  border-radius: 9999px;
+}
+
+.following-label {
+  font-size: 13px;
+  color: #71767b;
+}
+
+.username-input {
+  background: transparent;
+  border: none;
+  color: #1d9bf0;
+  font-size: 15px;
+  font-weight: 700;
+  width: 140px;
+  outline: none;
+}
+
+.username-input::before {
+  content: '@';
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: #16181c;
+}
+
+.status-indicator .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f4212e;
+}
+
+.status-indicator.active .status-dot {
+  background: #00ba7c;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(0.9); }
+}
+
+.status-indicator .status-text {
+  font-size: 13px;
+  color: #71767b;
+}
+
+.monitor-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #1d9bf0;
+  border: none;
+  border-radius: 9999px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.monitor-btn:hover {
+  background: #1a8cd8;
+}
+
+.monitor-btn.active {
+  background: #f4212e;
+}
+
+.monitor-btn .btn-icon {
+  font-size: 12px;
+}
+
+/* ========== MAIN CONTAINER ========== */
+.follow-container {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 0;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - 60px);
+}
+
+/* ========== FEED COLUMN (LEFT) ========== */
+.feed-column {
+  border-right: 1px solid #2f3336;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Latest Signal Card */
+.latest-signal-card {
+  padding: 24px;
+  border-bottom: 1px solid #2f3336;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.signal-waiting {
+  text-align: center;
+  color: #71767b;
+}
+
+.waiting-icon {
+  color: #2f3336;
+  margin-bottom: 16px;
+}
+
+.waiting-text {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.waiting-text strong {
+  color: #1d9bf0;
+}
+
+.waiting-hint {
+  font-size: 14px;
+  color: #536471;
+}
+
+.signal-display {
+  width: 100%;
+  max-width: 500px;
+}
+
+.signal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.signal-time {
+  font-size: 14px;
+  color: #71767b;
+}
+
+.signal-source {
+  color: #1d9bf0;
+  font-weight: 500;
+}
+
+.signal-body {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.signal-direction {
+  font-size: 48px;
+  font-weight: 900;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.signal-direction.call {
+  color: #00ba7c;
+  text-shadow: 0 0 30px rgba(0, 186, 124, 0.3);
+}
+
+.signal-direction.put {
+  color: #f4212e;
+  text-shadow: 0 0 30px rgba(244, 33, 46, 0.3);
+}
+
+.signal-details {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+
+.signal-symbol {
+  font-size: 28px;
+  font-weight: 700;
+  color: #e7e9ea;
+}
+
+.signal-strike {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1d9bf0;
+}
+
+.signal-expiry {
+  font-size: 16px;
+  color: #71767b;
+  align-self: center;
+}
+
+.signal-price {
+  font-size: 20px;
+  color: #ffd700;
+}
+
+.signal-confidence {
+  margin-bottom: 20px;
+}
+
+.confidence-bar {
+  height: 6px;
+  background: #2f3336;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.confidence-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #1d9bf0, #00ba7c);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+
+.confidence-label {
+  font-size: 13px;
+  color: #71767b;
+}
+
+.signal-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 14px 24px;
+  border: none;
+  border-radius: 9999px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.execute-btn {
+  background: #00ba7c;
+  color: #fff;
+}
+
+.execute-btn:hover {
+  background: #00a06a;
+}
+
+.skip-btn {
+  background: transparent;
+  border: 1px solid #536471;
+  color: #e7e9ea;
+}
+
+.skip-btn:hover {
+  background: rgba(239, 243, 244, 0.1);
+  border-color: #e7e9ea;
+}
+
+/* Tweet Feed Section */
+.tweet-feed-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #2f3336;
+}
+
+.section-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.load-history-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid #3b82f6;
+  border-radius: 9999px;
+  color: #3b82f6;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.load-history-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.load-history-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refresh-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 1px solid #2f3336;
+  border-radius: 50%;
+  color: #71767b;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: rgba(29, 155, 240, 0.1);
+  border-color: #1d9bf0;
+  color: #1d9bf0;
+}
+
+.tweet-list {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(100vh - 450px);
+}
+
+.tweet-empty {
+  padding: 40px 24px;
+  text-align: center;
+  color: #71767b;
+}
+
+.tweet-empty .hint {
+  font-size: 13px;
+  color: #536471;
+  margin-top: 8px;
+}
+
+/* Tweet Item (feed list) */
+.tweet-item {
+  padding: 16px 24px;
+  border-bottom: 1px solid #2f3336;
+  transition: background 0.2s;
+}
+
+.tweet-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tweet-item.call {
+  border-left: 3px solid #00ba7c;
+}
+
+.tweet-item.put {
+  border-left: 3px solid #f4212e;
+}
+
+.tweet-item .tweet-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tweet-item .tweet-author {
+  font-weight: 700;
+  color: #1d9bf0;
+  font-size: 14px;
+}
+
+.tweet-item .tweet-time {
+  font-size: 13px;
+  color: #71767b;
+}
+
+.tweet-item .tweet-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #e7e9ea;
+  margin-bottom: 12px;
+  word-wrap: break-word;
+}
+
+.tweet-item .tweet-signal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(29, 155, 240, 0.1);
+  border-radius: 12px;
+  margin-top: 8px;
+}
+
+.tweet-item.call .tweet-signal {
+  background: rgba(0, 186, 124, 0.1);
+}
+
+.tweet-item.put .tweet-signal {
+  background: rgba(244, 33, 46, 0.1);
+}
+
+.signal-badge {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.signal-badge.call {
+  background: #00ba7c;
+  color: #fff;
+}
+
+.signal-badge.put {
+  background: #f4212e;
+  color: #fff;
+}
+
+.signal-detail {
+  font-weight: 600;
+  color: #e7e9ea;
+  font-size: 14px;
+}
+
+.signal-expiry {
+  color: #71767b;
+  font-size: 13px;
+}
+
+.signal-price {
+  color: #ffd700;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.signal-conf {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: #2f3336;
+  color: #71767b;
+}
+
+.signal-conf.high {
+  background: rgba(0, 186, 124, 0.2);
+  color: #00ba7c;
+}
+
+.signal-conf.medium {
+  background: rgba(255, 215, 0, 0.2);
+  color: #ffd700;
+}
+
+.signal-conf.low {
+  background: rgba(244, 33, 46, 0.2);
+  color: #f4212e;
+}
+
+.signal-close {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f4212e;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Trade signal styling in trades list */
+.trade-signal {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.trade-signal.call {
+  color: #00ba7c;
+}
+
+.trade-signal.put {
+  color: #f4212e;
+}
+
+.trade-time {
+  font-size: 12px;
+  color: #71767b;
+}
+
+.trade-pnl {
+  font-weight: 700;
+  font-size: 16px;
+  text-align: right;
+}
+
+.trade-pnl.profit {
+  color: #00ba7c;
+}
+
+.trade-pnl.loss {
+  color: #f4212e;
+}
+
+.trade-percent {
+  font-size: 12px;
+  font-weight: 400;
+  color: #71767b;
+}
+
+/* Tweet Card (alternate styling) */
+.tweet-card {
+  padding: 16px 24px;
+  border-bottom: 1px solid #2f3336;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.tweet-card:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tweet-card.has-signal {
+  border-left: 3px solid #1d9bf0;
+}
+
+.tweet-card.has-signal.bullish {
+  border-left-color: #00ba7c;
+}
+
+.tweet-card.has-signal.bearish {
+  border-left-color: #f4212e;
+}
+
+.tweet-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tweet-author {
+  font-weight: 700;
+  color: #e7e9ea;
+}
+
+.tweet-handle {
+  color: #71767b;
+}
+
+.tweet-time {
+  color: #71767b;
+  font-size: 14px;
+}
+
+.tweet-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: #e7e9ea;
+  margin-bottom: 12px;
+}
+
+.tweet-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(29, 155, 240, 0.1);
+  border-radius: 8px;
+}
+
+.tweet-signal.bullish {
+  background: rgba(0, 186, 124, 0.1);
+}
+
+.tweet-signal.bearish {
+  background: rgba(244, 33, 46, 0.1);
+}
+
+.tweet-signal-type {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.tweet-signal.bullish .tweet-signal-type {
+  color: #00ba7c;
+}
+
+.tweet-signal.bearish .tweet-signal-type {
+  color: #f4212e;
+}
+
+.tweet-signal-details {
+  font-size: 13px;
+  color: #71767b;
+}
+
+/* ========== INFO COLUMN (RIGHT) ========== */
+.info-column {
+  display: flex;
+  flex-direction: column;
+  background: #000;
+}
+
+/* Stats Section */
+.stats-section {
+  padding: 16px;
+  border-bottom: 1px solid #2f3336;
+}
+
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.stat-item {
+  text-align: center;
+  padding: 12px 8px;
+  background: #16181c;
+  border-radius: 12px;
+}
+
+.stat-number {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e7e9ea;
+}
+
+.stat-item.pnl .stat-number {
+  color: #00ba7c;
+}
+
+.stat-item.pnl.negative .stat-number {
+  color: #f4212e;
+}
+
+.stat-name {
+  font-size: 11px;
+  color: #71767b;
+  margin-top: 4px;
+  text-transform: uppercase;
+}
+
+/* Settings Section */
+.settings-section {
+  padding: 16px;
+  border-bottom: 1px solid #2f3336;
+}
+
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.setting-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.setting-item label {
+  font-size: 14px;
+  color: #71767b;
+}
+
+.toggle-btn {
+  padding: 6px 16px;
+  background: #2f3336;
+  border: none;
+  border-radius: 9999px;
+  color: #71767b;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.toggle-btn.active {
+  background: #00ba7c;
+  color: #fff;
+}
+
+.setting-select {
+  padding: 6px 12px;
+  background: #16181c;
+  border: 1px solid #2f3336;
+  border-radius: 8px;
+  color: #e7e9ea;
+  font-size: 13px;
+}
+
+.link-btn {
+  padding: 6px 16px;
+  background: #16181c;
+  border: 1px solid #2f3336;
+  border-radius: 9999px;
+  color: #1d9bf0;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+
+.link-btn:hover {
+  background: rgba(29, 155, 240, 0.1);
+}
+
+.link-btn.connected {
+  border-color: #00ba7c;
+  color: #00ba7c;
+}
+
+/* Trades Section */
+.trades-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #2f3336;
+  max-height: 300px;
+}
+
+.trades-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.trades-empty {
+  padding: 24px;
+  text-align: center;
+  color: #71767b;
+  font-size: 14px;
+}
+
+.clear-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: 1px solid #2f3336;
+  border-radius: 9999px;
+  color: #71767b;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.clear-btn:hover {
+  border-color: #f4212e;
+  color: #f4212e;
+}
+
+/* Trade Item */
+.trade-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: #16181c;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.trade-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trade-symbol {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.trade-symbol.call {
+  color: #00ba7c;
+}
+
+.trade-symbol.put {
+  color: #f4212e;
+}
+
+.trade-details {
+  font-size: 12px;
+  color: #71767b;
+}
+
+.trade-pnl {
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.trade-pnl.positive {
+  color: #00ba7c;
+}
+
+.trade-pnl.negative {
+  color: #f4212e;
+}
+
+/* Log Section */
+.log-section {
+  border-bottom: 1px solid #2f3336;
+}
+
+.section-header.collapsible {
+  cursor: pointer;
+}
+
+.section-header.collapsible:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.collapse-icon {
+  color: #71767b;
+  transition: transform 0.2s;
+}
+
+.log-section.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.log-section.collapsed .log-content {
+  display: none;
+}
+
+.log-content {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.log-list {
+  padding: 8px 16px;
+}
+
+.log-empty {
+  padding: 16px;
+  text-align: center;
+  color: #536471;
+  font-size: 13px;
+}
+
+.log-entry {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #2f3336;
+}
+
+.log-entry:last-child {
+  border-bottom: none;
+}
+
+.log-time {
+  color: #536471;
+  white-space: nowrap;
+}
+
+.log-message {
+  color: #e7e9ea;
+}
+
+.log-entry.success .log-message {
+  color: #00ba7c;
+}
+
+.log-entry.error .log-message {
+  color: #f4212e;
+}
+
+.log-entry.info .log-message {
+  color: #1d9bf0;
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 1024px) {
+  .follow-container {
+    grid-template-columns: 1fr;
+  }
+
+  .feed-column {
+    border-right: none;
+    border-bottom: 1px solid #2f3336;
+  }
+
+  .info-column {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .stats-section,
+  .settings-section {
+    border-right: 1px solid #2f3336;
+  }
+}
+
+@media (max-width: 768px) {
+  .follow-header {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .header-center {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .info-column {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .signal-details {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OPPUT - Login to Robinhood</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="header">
+    <h1>OPPUT Trading</h1>
+    <div class="header-controls">
+      <a href="../dashboard/" class="nav-link">Dashboard</a>
+      <a href="../spy-options/" class="nav-link">Options</a>
+      <a href="../trading/" class="nav-link">Trading</a>
+    </div>
+  </header>
+
+  <main class="login-container">
+    <div class="login-card" id="loginCard">
+      <div class="login-header">
+        <h2>Robinhood Login</h2>
+        <p>Connect your Robinhood account to enable live trading</p>
+      </div>
+
+      <!-- API Status -->
+      <div class="api-status" id="apiStatus">
+        <span class="api-dot" id="apiDot"></span>
+        <span id="apiText">Checking API connection...</span>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="login-form">
+        <div class="form-group">
+          <label for="username">Email</label>
+          <input type="email" id="username" placeholder="your@email.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" placeholder="Password" required>
+        </div>
+
+        <div class="form-group">
+          <label for="mfaCode">MFA Code (optional)</label>
+          <input type="text" id="mfaCode" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}">
+          <span class="form-hint">Enter your 6-digit authenticator code if enabled</span>
+        </div>
+
+        <div class="form-error" id="formError" style="display:none;"></div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="loginBtn">
+          Login to Robinhood
+        </button>
+      </form>
+
+      <!-- Quick Connect -->
+      <div class="divider">
+        <span>or</span>
+      </div>
+
+      <button class="btn btn-secondary btn-full" id="autoConnectBtn">
+        Connect with .env Credentials
+      </button>
+      <p class="auto-connect-hint">Uses ROBINHOOD_USERNAME and ROBINHOOD_PASSWORD from .env</p>
+    </div>
+
+    <!-- Verification Card (shown when challenge required) -->
+    <div class="login-card" id="verificationCard" style="display:none;">
+      <div class="login-header">
+        <h2>Verification Required</h2>
+        <p id="verificationMessage">Enter the verification code sent to your device</p>
+      </div>
+
+      <form id="verificationForm" class="login-form">
+        <div class="form-group" id="codeInputGroup">
+          <label for="verificationCode">Verification Code</label>
+          <input type="text" id="verificationCode" placeholder="Enter code" maxlength="10" autocomplete="one-time-code">
+          <span class="form-hint">Check your phone or email for the code</span>
+        </div>
+
+        <div class="form-group" id="appApprovalGroup" style="display:none;">
+          <div class="app-approval-notice">
+            <span class="app-icon">📱</span>
+            <p>Open your Robinhood app and approve the login request</p>
+          </div>
+        </div>
+
+        <div class="form-error" id="verificationError" style="display:none;"></div>
+
+        <button type="submit" class="btn btn-primary btn-full" id="verifyBtn">
+          Verify
+        </button>
+        <button type="button" class="btn btn-secondary btn-full" id="cancelVerifyBtn" style="margin-top: 10px;">
+          Cancel
+        </button>
+      </form>
+    </div>
+
+    <!-- Account Info (shown after login) -->
+    <div class="account-card" id="accountCard" style="display:none;">
+      <div class="account-header">
+        <h3>Account Connected</h3>
+        <span class="account-user" id="accountUser">--</span>
+      </div>
+
+      <div class="account-stats">
+        <div class="stat-item">
+          <span class="stat-value" id="buyingPower">$0.00</span>
+          <span class="stat-label">Buying Power</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="stockPositions">0</span>
+          <span class="stat-label">Stock Positions</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="optionPositions">0</span>
+          <span class="stat-label">Option Positions</span>
+        </div>
+      </div>
+
+      <div class="account-actions">
+        <a href="../dashboard/" class="btn btn-success">Go to Dashboard</a>
+        <a href="../trading/" class="btn btn-primary">Start Trading</a>
+        <button class="btn btn-secondary" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

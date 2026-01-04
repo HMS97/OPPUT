@@ -4,15 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>OPPUT - Live Trading</title>
+  <link rel="stylesheet" href="../shared/sidebar.css">
+  <link rel="stylesheet" href="../shared/app-layout.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body>
+<body class="has-sidebar">
   <header class="header">
     <h1>Live Trading - Robinhood</h1>
     <div class="header-controls">
-      <a href="../dashboard/" class="nav-link">Dashboard</a>
-      <a href="../backtest/" class="nav-link">Backtester</a>
-      <a href="../spy-options/" class="nav-link">Options Analysis</a>
       <div class="status-badge">
         <div class="status-dot" id="statusDot"></div>
         <span id="statusText">Disconnected</span>
@@ -149,6 +148,7 @@
         <h3>Robinhood Login</h3>
         <button class="modal-close" id="closeModal">&times;</button>
       </div>
+      <!-- Login Form -->
       <form id="loginForm">
         <div class="form-group">
           <label>Username (Email)</label>
@@ -158,13 +158,27 @@
           <label>Password</label>
           <input type="password" id="loginPassword" placeholder="Password" required>
         </div>
-        <div class="form-group">
-          <label>MFA Code (from authenticator app)</label>
-          <input type="text" id="loginMfa" placeholder="6-digit code" maxlength="6" pattern="[0-9]{6}">
-        </div>
         <div class="form-error" id="loginError" style="display:none;"></div>
         <button type="submit" class="btn btn-primary btn-full" id="loginSubmit">Login</button>
+        <p class="form-hint" style="margin-top:10px;text-align:center;">You may be asked to verify via SMS or the Robinhood app</p>
       </form>
+      <!-- Verification Form (shown after challenge) -->
+      <div id="verificationSection" style="display:none;">
+        <p class="verification-message" id="verificationMessage">Enter the verification code sent to your device</p>
+        <form id="verificationForm">
+          <div class="form-group" id="codeInputGroup">
+            <label>Verification Code</label>
+            <input type="text" id="verificationCode" placeholder="Enter code" maxlength="10" autocomplete="one-time-code">
+          </div>
+          <div id="appApprovalGroup" style="display:none;padding:20px;text-align:center;background:#21262d;border-radius:8px;margin-bottom:16px;">
+            <div style="font-size:32px;margin-bottom:10px;">📱</div>
+            <p style="color:#8b949e;">Open your Robinhood app and approve the login request</p>
+          </div>
+          <div class="form-error" id="verificationError" style="display:none;"></div>
+          <button type="submit" class="btn btn-primary btn-full" id="verifyBtn">Verify</button>
+          <button type="button" class="btn btn-secondary btn-full" id="cancelVerifyBtn" style="margin-top:10px;">Back</button>
+        </form>
+      </div>
     </div>
   </div>
 

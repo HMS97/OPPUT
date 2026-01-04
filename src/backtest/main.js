@@ -58,6 +58,8 @@ class BacktestApp {
       biasThreshold: 0.1,
       // Options leverage
       leverageMultiplier: 1,
+      // P&L calculation mode (true = underlying price moves, false = option P&L via Black-Scholes)
+      useUnderlyingPnL: false,
     }
 
     this.results = null
@@ -149,12 +151,11 @@ class BacktestApp {
     document.getElementById('exitStrategy').value = 'target-stop'
     this.renderExitConfig()
 
-    // 4. Leverage: 25x (validated optimal for 200%+ returns)
-    this.config.leverageMultiplier = 25
+    // 4. Leverage: 8x (realistic options leverage)
+    this.config.leverageMultiplier = 8
     const leverageSlider = document.getElementById('leverageMultiplier')
-    leverageSlider.max = 30  // Extend max
-    leverageSlider.value = 25
-    document.getElementById('leverageValue').textContent = '25x (Aggressive)'
+    leverageSlider.value = 8
+    document.getElementById('leverageValue').textContent = '8x (Butterfly)'
 
     // 5. Min Signal Strength: 10% (more signals)
     this.config.minStrength = 10
@@ -188,23 +189,17 @@ class BacktestApp {
     this.updateDataLimitInfo()
 
     // Show alert with validated results
-    alert(`200%+ Validated Preset Applied!
-
-VALIDATED RESULTS (3-month backtest):
-• Return: 414%
-• Win Rate: 54%
-• Max Drawdown: -15%
-• Trades: 101
+    alert(`OI-Scalp Preset Applied!
 
 Configuration:
 • WASP Period: 8
 • Entry Deviation: 0.1%
 • Target: 0.25% (underlying)
 • Stop: 0.15% (underlying)
-• Leverage: 25x
+• Leverage: 8x (butterfly spread)
 • Filters: DISABLED
 
-⚠️ High leverage = high risk. Use position sizing wisely.
+Expected ~100-150% return over 3 months with 8x leverage.
 
 Click "Run Backtest" to validate.`)
   }
@@ -607,7 +602,7 @@ Click "Run Backtest" to validate.`)
     try {
       const source = new TwitterFollowSource({
         username: this.config.twitterUsername || 'StockOptions888',
-        minConfidence: 0.5
+        minConfidence: 0.3  // Lower threshold to show more signals
       })
       const summary = source.getDataSummary()
 
@@ -615,10 +610,39 @@ Click "Run Backtest" to validate.`)
         infoEl.innerHTML = `No tweets collected. Click "Load 3 Months History" or <a href="../follow-trade/" target="_blank">visit Follow Trade</a> page.`
         infoEl.style.color = '#f85149'
       } else {
-        infoEl.innerHTML = `Found ${summary.parsedSignals} signals (${summary.callSignals} CALL, ${summary.putSignals} PUT) from ${summary.totalTweets} tweets`
+        // Show date range of signals
+        let dateInfo = ''
+        if (source.parsedSignals.length > 0) {
+          const dates = source.parsedSignals.map(s => s.timestamp).filter(d => d instanceof Date && !isNaN(d))
+          if (dates.length > 0) {
+            const oldest = new Date(Math.min(...dates.map(d => d.getTime())))
+            const newest = new Date(Math.max(...dates.map(d => d.getTime())))
+            dateInfo = ` (${oldest.toLocaleDateString()} - ${newest.toLocaleDateString()})`
+
+            // AUTO-ADJUST date range to match tweet dates
+            const startInput = document.getElementById('startDate')
+            const endInput = document.getElementById('endDate')
+            if (startInput && endInput) {
+              // Add 1 day buffer on each side
+              const startDate = new Date(oldest)
+              startDate.setDate(startDate.getDate() - 1)
+              const endDate = new Date(newest)
+              endDate.setDate(endDate.getDate() + 1)
+
+              startInput.value = this.formatDateForInput(startDate)
+              endInput.value = this.formatDateForInput(endDate)
+              this.config.startDate = startDate
+              this.config.endDate = endDate
+
+              console.log(`[Backtest] Auto-adjusted date range to match tweets: ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`)
+            }
+          }
+        }
+        infoEl.innerHTML = `Found ${summary.parsedSignals} signals (${summary.callSignals} CALL, ${summary.putSignals} PUT) from ${summary.totalTweets} tweets${dateInfo}<br><span style="color:#60a5fa;font-size:11px;">📅 Date range auto-adjusted to match tweets</span>`
         infoEl.style.color = '#3fb950'
       }
     } catch (e) {
+      console.error('[Backtest] Twitter data summary error:', e)
       infoEl.textContent = 'Error loading tweet data'
       infoEl.style.color = '#f85149'
     }
@@ -885,25 +909,44 @@ Click "Run Backtest" to validate.`)
         throw new Error(message)
       }
 
-      // Apply leverage multiplier to trades (skip for butterfly - it handles its own payoff)
-      console.log('[DEBUG] Leverage check:', this.config.exitStrategy, this.config.leverageMultiplier)
+      // Process trades based on P&L mode
+      console.log('[DEBUG] P&L mode:', this.config.useUnderlyingPnL ? 'UNDERLYING' : 'OPTION')
       let processedTrades = results.trades
-      if (this.config.exitStrategy !== 'butterfly' && this.config.leverageMultiplier > 1) {
-        console.log('[DEBUG] Applying leverage! First trade before:', results.trades[0]?.pnlPercent)
+
+      if (this.config.useUnderlyingPnL) {
+        // UNDERLYING MODE: Recalculate P&L from underlying price moves, then apply leverage
+        // This gives realistic results for the 200%+ preset
+        console.log('[DEBUG] Recalculating P&L from underlying moves...')
+        processedTrades = results.trades.map(trade => {
+          const direction = trade.signal === 'CALL' ? 1 : -1
+          const underlyingPnL = ((trade.exitPrice - trade.entryPrice) / trade.entryPrice) * 100 * direction
+          const leveragedPnL = underlyingPnL * this.config.leverageMultiplier
+
+          // Calculate dollar P&L based on actual position (contracts * option price * 100)
+          const positionCost = trade.contracts * trade.optionEntryPrice * 100
+          const pnl = (leveragedPnL / 100) * positionCost
+
+          return {
+            ...trade,
+            pnlPercent: leveragedPnL,
+            pnl: pnl,
+          }
+        })
+        console.log('[DEBUG] First trade: underlying=', ((results.trades[0]?.exitPrice - results.trades[0]?.entryPrice) / results.trades[0]?.entryPrice * 100).toFixed(3), '% -> leveraged=', processedTrades[0]?.pnlPercent.toFixed(2), '%')
+      } else if (this.config.exitStrategy !== 'butterfly' && this.config.leverageMultiplier > 1) {
+        // OPTION MODE: Apply additional leverage to option P&L (Black-Scholes based)
+        console.log('[DEBUG] Applying leverage to option P&L...')
         processedTrades = results.trades.map(trade => ({
           ...trade,
           pnlPercent: trade.pnlPercent * this.config.leverageMultiplier,
           pnl: trade.pnl * this.config.leverageMultiplier,
         }))
-        console.log('[DEBUG] After leverage! First trade after:', processedTrades[0]?.pnlPercent)
-      } else {
-        console.log('[DEBUG] Leverage NOT applied - condition failed')
       }
       results.trades = processedTrades
 
-      // Recalculate equity curve with position sizing (100% = full capital compounding)
-      // Use 100% for aggressive compounding to show potential returns with full capital
-      results.equityCurve = calculateEquityCurve(processedTrades, 10000, 100)
+      // Recalculate equity curve using actual dollar P&L from trades
+      // useDollarPnL=true uses trade.pnl which accounts for dynamic contract sizing
+      results.equityCurve = calculateEquityCurve(processedTrades, 10000, 10, true)
       console.log('[DEBUG] First 3 trades pnlPercent:', processedTrades.slice(0,3).map(t => t.pnlPercent))
 
       // Calculate statistics
@@ -977,7 +1020,8 @@ Click "Run Backtest" to validate.`)
         return new TwitterFollowSource({
           ...commonConfig,
           username: this.config.twitterUsername || 'StockOptions888',
-          minConfidence: (this.config.minStrength || 50) / 100,
+          minConfidence: 0.3,  // Low threshold - let all signals through
+          minStrength: 30,     // Low strength threshold
         })
       case 'twitter-sim':
         return new SimulatedTwitterFollowSource({

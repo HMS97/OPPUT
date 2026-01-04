@@ -4,15 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SPY Signal Alert - PUT/CALL Dashboard with Backtesting</title>
+  <link rel="stylesheet" href="../shared/sidebar.css">
+  <link rel="stylesheet" href="../shared/app-layout.css">
   <link rel="stylesheet" href="./styles.css">
 </head>
-<body>
+<body class="has-sidebar">
   <header class="header">
     <h1>SPY Signal Dashboard (PUT/CALL)</h1>
     <div class="header-controls">
-      <a href="../backtest/" class="nav-link">Backtester</a>
-      <a href="../spy-options/" class="nav-link">Options Analysis</a>
-      <a href="../trading/" class="nav-link">Live Trading</a>
       <div class="data-toggle">
         <button class="data-toggle-btn active" id="realtimeBtn">Real-time</button>
         <button class="data-toggle-btn" id="replayBtn">Replay</button>
@@ -167,7 +166,7 @@
         </div>
       </div>
 
-      <div class="sidebar">
+      <div class="right-panel">
         <div class="card">
           <div class="card-title">All Detected Patterns</div>
           <div class="combined-patterns" id="allPatternsList">

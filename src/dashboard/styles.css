@@ -265,8 +265,8 @@ body {
 .chart-tab.active { background: rgba(255,255,255,0.1); color: white; }
 .chart-container { height: 350px; }
 
-/* Sidebar */
-.sidebar { display: flex; flex-direction: column; gap: 16px; }
+/* Right Panel (patterns, alerts, settings) */
+.right-panel { display: flex; flex-direction: column; gap: 16px; }
 
 .card {
   background: #1a1a2e;

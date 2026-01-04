@@ -11,6 +11,7 @@ import {
   PATTERN_ICONS,
   SENSITIVITY_CONFIGS,
 } from '@core'
+import { initSidebar } from '../shared/sidebar.js'
 
 const TF_CONFIG = TIMEFRAME_CONFIG
 
@@ -52,6 +53,9 @@ class SPYDashboard {
   }
 
   async init() {
+    // Initialize sidebar navigation
+    await initSidebar({ activePage: 'dashboard' })
+
     this.initDetectors()
     this.initChart()
     this.bindEvents()

@@ -23,6 +23,8 @@ export {
   fetchCandleData,
   fetchVIX,
   generateDemoData,
+  fetch3MonthData,
+  DEFAULT_DATA_DAYS,
 } from './data/index.js'
 
 // Utilities
@@ -78,3 +80,15 @@ export {
   RiskManager,
   SignalRunner,
 } from './trading/index.js'
+
+// Tweet parsing for follow trading
+export {
+  parseTweet,
+  validateForExecution,
+  getConfidenceLabel,
+  isClosingTrade,
+  parseMultipleTweets,
+} from './trading/tweet-parser.js'
+
+// Auth - Robinhood authentication
+export * from './auth/index.js'

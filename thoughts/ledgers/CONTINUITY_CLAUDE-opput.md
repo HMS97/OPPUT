@@ -1,5 +1,5 @@
 # CONTINUITY_CLAUDE-opput
-Updated: 2026-01-02T06:00:00.000Z
+Updated: 2026-01-04T05:00:07.861Z
 
 ## Goal
 Maintain and fix bugs in the OPPUT trading analysis platform following the established Vite-based modular architecture.
@@ -103,8 +103,18 @@ OPPUT/
     - Root cause: Equity curve was calculated in engine BEFORE leverage applied in main.js
     - Fix: Recalculate equity curve after applying leverage to trades using calculateEquityCurve()
     - Now trades AND equity chart reflect leveraged returns correctly
-- Now: [→] Verification system implemented
-- Next: Test /verify skill integration with commits
+- Now: [→] Strategies documentation page added
+- Next: Monitor for user feedback on new page
+- Verified (2026-01-04):
+  - [x] Build verification: Vite build succeeds, all 6 pages generated
+  - [x] Added Strategies documentation page with signal sources, exit strategies, and presets
+  - [x] Module imports: All 12 core modules load correctly
+  - [x] Signal sources: All 6 work (Pattern, Daily, OI-Scalp, OI-Trend, OI-MTF, IV)
+  - [x] Exit strategies: All 4 work (Fixed Bars, Opposite Signal, Target-Stop, Butterfly)
+  - [x] Backtest engine: Generates trades correctly (30 trades in test run)
+  - [x] Statistics: Win rate calculation works (46.7% in test)
+  - [x] API server: Yahoo Finance proxy returns valid data
+  - [x] CSS: No blocking issues found
 - Done recently (2026-01-02):
   - [x] Created scripts/verify.js - 3-level verification (build, imports, smoke tests)
   - [x] Added npm run verify and npm run verify:full scripts
@@ -245,37 +255,72 @@ src/backtest/main.js
 - Always test build before committing changes
 
 ## Agent Reports
-
-### onboard (2026-01-02T03:22:20.695Z)
+### onboard (2026-01-04T05:07:58.934Z)
 - Task: 
 - Summary: 
 - Output: `.claude/cache/agents/onboard/latest-output.md`
-
-### onboard (2026-01-02T03:14:33.032Z)
+### onboard (2026-01-04T05:04:47.234Z)
 - Task: 
 - Summary: 
 - Output: `.claude/cache/agents/onboard/latest-output.md`
-
-### onboard (2026-01-02T03:12:13.001Z)
+### onboard (2026-01-04T05:01:51.509Z)
 - Task: 
 - Summary: 
 - Output: `.claude/cache/agents/onboard/latest-output.md`
-
-### onboard (2026-01-02T03:07:25.641Z)
+### onboard (2026-01-04T04:45:38.265Z)
 - Task: 
 - Summary: 
 - Output: `.claude/cache/agents/onboard/latest-output.md`
-
-### onboard (2026-01-02T02:59:06.907Z)
+### onboard (2026-01-04T04:42:51.255Z)
 - Task: 
 - Summary: 
 - Output: `.claude/cache/agents/onboard/latest-output.md`
-
-### onboard (2026-01-02T02:50:48.242Z)
+### onboard (2026-01-04T04:40:31.307Z)
 - Task: 
 - Summary: 
 - Output: `.claude/cache/agents/onboard/latest-output.md`
-### onboard (2026-01-01T23:02:44.037Z)
+### onboard (2026-01-04T04:38:41.712Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`
+### onboard (2026-01-04T04:34:27.056Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`
+### onboard (2026-01-04T04:32:44.058Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-04T04:16:21.717Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-04T03:51:25.714Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-04T03:51:01.850Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-04T03:50:39.348Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-02T03:22:20.695Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-02T03:14:33.032Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-02T03:12:13.001Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-02T03:07:25.641Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-02T02:59:06.907Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-02T02:50:48.242Z)
+- Task: 
+- Summary: 
+- Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-01T23:02:44.037Z)
 - Task: 
 - Summary: 
 - Output: `.claude/cache/agents/onboard/latest-output.md`### onboard (2026-01-01T22:56:13.899Z)
