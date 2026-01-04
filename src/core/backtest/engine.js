@@ -27,6 +27,7 @@ export class BacktestEngine {
     this.positionPercent = config.positionPercent ?? 10
     this.maxConcurrentTrades = config.maxConcurrentTrades ?? 1
     this.allowReversal = config.allowReversal ?? false
+    this.timeframe = config.timeframe ?? 5  // Candle timeframe in minutes (for option time decay)
 
     // State
     this.equity = this.initialCapital
@@ -61,6 +62,7 @@ export class BacktestEngine {
     this.closedTrades = []
     this.equityCurve = []
     this.signals = []
+    this.bankruptAt = null  // Track bankruptcy point
     resetTradeIdCounter()
 
     // Record initial equity
@@ -72,6 +74,13 @@ export class BacktestEngine {
 
     // Process each candle
     for (let i = 0; i < this.candles.length; i++) {
+      // BANKRUPTCY CHECK: Stop trading if equity drops to 0 or below
+      if (this.equity <= 0) {
+        this.bankruptAt = i
+        console.log(`[Backtest] BANKRUPTCY at candle ${i} - equity depleted`)
+        break
+      }
+
       await this.processCandle(i)
 
       // Report progress
@@ -84,7 +93,7 @@ export class BacktestEngine {
     const lastCandle = this.candles[this.candles.length - 1]
     const lastIndex = this.candles.length - 1
     for (const trade of [...this.openTrades]) {
-      const closed = closeTrade(trade, lastCandle, lastIndex, 'End of data')
+      const closed = closeTrade(trade, lastCandle, lastIndex, 'End of data', this.timeframe)
       this.closedTrades.push(closed)
       this.equity += this.calculateTradePnL(closed)
       if (this.onTradeCallback) {
@@ -122,9 +131,9 @@ export class BacktestEngine {
   async processCandle(index) {
     const candle = this.candles[index]
 
-    // 1. Update open trades
+    // 1. Update open trades (pass timeframe for option time decay)
     for (const trade of this.openTrades) {
-      updateTrade(trade, candle)
+      updateTrade(trade, candle, this.timeframe)
     }
 
     // 2. Check exits for open trades
@@ -166,7 +175,7 @@ export class BacktestEngine {
       const exitResult = this.exitStrategy.shouldExit(trade, candle, currentSignal)
 
       if (exitResult.shouldExit) {
-        const closed = closeTrade(trade, candle, index, exitResult.reason)
+        const closed = closeTrade(trade, candle, index, exitResult.reason, this.timeframe)
 
         // If exit strategy provides custom P&L (e.g., butterfly payoff), use it directly
         if (exitResult.butterflyPnL !== undefined) {
@@ -210,7 +219,7 @@ export class BacktestEngine {
         if (currentTrade.signal !== signal.direction) {
           // Close current and reverse
           const candle = this.candles[index]
-          const closed = closeTrade(currentTrade, candle, index, 'Reversal')
+          const closed = closeTrade(currentTrade, candle, index, 'Reversal', this.timeframe)
           this.closedTrades.push(closed)
           this.equity += this.calculateTradePnL(closed)
           this.openTrades = []

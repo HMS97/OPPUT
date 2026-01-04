@@ -1,18 +1,24 @@
 /**
  * Target/Stop-Loss Exit Strategy
- * Exit when price hits profit target or stop loss
+ * Exit when OPTION P&L hits profit target or stop loss
+ *
+ * NOTE: Uses trade.pnlPercent which is the OPTION P&L (via Black-Scholes),
+ * not the underlying stock price movement. This is important because
+ * options have inherent leverage (5-20x depending on delta).
  */
 
 export class TargetStopExit {
   /**
-   * @param {number} targetPercent - Profit target as percentage (e.g., 1 = 1%)
-   * @param {number} stopPercent - Stop loss as percentage (e.g., 0.5 = 0.5%)
+   * @param {number} targetPercent - Option profit target as percentage (e.g., 20 = 20%)
+   * @param {number} stopPercent - Option stop loss as percentage (e.g., 30 = 30%)
    * @param {number} maxBars - Maximum bars to hold (failsafe)
+   * @param {boolean} useOptionPnL - Use option P&L (true) or underlying P&L (false)
    */
-  constructor(targetPercent = 1.0, stopPercent = 0.5, maxBars = 50) {
+  constructor(targetPercent = 20, stopPercent = 30, maxBars = 50, useOptionPnL = true) {
     this.targetPercent = targetPercent
     this.stopPercent = stopPercent
     this.maxBars = maxBars
+    this.useOptionPnL = useOptionPnL
     this.name = `Target ${targetPercent}% / Stop ${stopPercent}%`
   }
 
@@ -32,15 +38,22 @@ export class TargetStopExit {
       }
     }
 
-    // Calculate current P&L percentage
-    const direction = trade.signal === 'CALL' ? 1 : -1
-    const pnlPercent = ((candle.close - trade.entryPrice) / trade.entryPrice) * 100 * direction
+    let pnlPercent
+
+    if (this.useOptionPnL) {
+      // Use the trade's actual OPTION P&L (updated by updateTrade via Black-Scholes)
+      pnlPercent = trade.pnlPercent
+    } else {
+      // Legacy: use underlying price movement
+      const direction = trade.signal === 'CALL' ? 1 : -1
+      pnlPercent = ((candle.close - trade.entryPrice) / trade.entryPrice) * 100 * direction
+    }
 
     // Check target hit
     if (pnlPercent >= this.targetPercent) {
       return {
         shouldExit: true,
-        reason: `Target hit (+${pnlPercent.toFixed(2)}%)`,
+        reason: `Target hit (+${pnlPercent.toFixed(1)}%)`,
       }
     }
 
@@ -48,7 +61,7 @@ export class TargetStopExit {
     if (pnlPercent <= -this.stopPercent) {
       return {
         shouldExit: true,
-        reason: `Stop loss hit (${pnlPercent.toFixed(2)}%)`,
+        reason: `Stop loss hit (${pnlPercent.toFixed(1)}%)`,
       }
     }
 

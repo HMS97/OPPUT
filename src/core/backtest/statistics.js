@@ -384,21 +384,35 @@ export function monteCarloSimulation(trades, iterations = 1000) {
  * Calculate equity curve from trades
  * @param {Array} trades - Closed trades
  * @param {number} initialCapital - Starting capital
+ * @param {number} positionPercent - Position size as % of capital (default 100 for full capital)
  * @returns {Array} - Equity curve points
  */
-export function calculateEquityCurve(trades, initialCapital = 10000) {
+export function calculateEquityCurve(trades, initialCapital = 10000, positionPercent = 100) {
   if (trades.length === 0) return []
 
   const curve = [{ time: trades[0].entryTime, equity: initialCapital, drawdown: 0 }]
 
   let equity = initialCapital
   let peak = initialCapital
+  const positionFraction = positionPercent / 100
 
   for (const trade of trades) {
-    const pnlDollars = (trade.pnlPercent / 100) * (initialCapital * 0.1) // Assume 10% position size
+    // BANKRUPTCY CHECK: Stop if equity is at or below 0
+    if (equity <= 0) {
+      console.log('[EquityCurve] BANKRUPTCY - stopping equity calculation')
+      break
+    }
+
+    // Position size as fraction of CURRENT equity (compounding)
+    const positionSize = equity * positionFraction
+    const pnlDollars = (trade.pnlPercent / 100) * positionSize
     equity += pnlDollars
+
+    // FLOOR AT ZERO: Equity cannot go negative
+    equity = Math.max(0, equity)
+
     peak = Math.max(peak, equity)
-    const drawdown = ((equity - peak) / peak) * 100
+    const drawdown = peak > 0 ? ((equity - peak) / peak) * 100 : -100
 
     curve.push({
       time: trade.exitTime,
