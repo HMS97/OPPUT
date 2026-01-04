@@ -11,7 +11,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "verify": "node scripts/verify.js",
-    "verify:full": "node scripts/verify.js --full"
+    "verify:full": "node scripts/verify.js --full",
+    "api": "cd src && uvicorn robinhood_api:app --port 8001",
+    "trading": "npm run api & npm run dev",
+    "login": "python3 scripts/robinhood-login.py",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@mathieuc/tradingview": "^3.0.0",
@@ -21,6 +28,10 @@
     "express": "^4.22.1"
   },
   "devDependencies": {
-    "vite": "^7.3.0"
+    "@testing-library/dom": "^10.4.1",
+    "@vitest/coverage-v8": "^4.0.16",
+    "jsdom": "^27.4.0",
+    "vite": "^7.3.0",
+    "vitest": "^4.0.16"
   }
 }
