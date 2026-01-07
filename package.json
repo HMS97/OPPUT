@@ -13,6 +13,8 @@
     "verify": "node scripts/verify.js",
     "verify:full": "node scripts/verify.js --full",
     "api": "cd src && uvicorn robinhood_api:app --port 8001",
+    "lumibot": "source .venv-lumibot/bin/activate && python scripts/lumibot_api.py",
+    "backtest": "npm run lumibot & npm run dev",
     "trading": "npm run api & npm run dev",
     "login": "python3 scripts/robinhood-login.py",
     "test": "vitest run",

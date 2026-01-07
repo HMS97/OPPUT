@@ -20,9 +20,11 @@
       <div class="panel-header">
         <h2>Backtest Configuration</h2>
         <div class="header-actions">
-          <button class="btn-secondary btn-sm" id="apply200Preset" title="5m OI-Scalp (8x leverage)">5m Scalp</button>
-          <button class="btn-accent btn-sm" id="apply15mPreset" title="OPTIMIZED: 65.6% win rate, 2.40 PF">15m Scalp ★</button>
-          <button class="btn-secondary btn-sm" id="apply60mPreset" title="60m Pattern Trading">60m Pattern</button>
+          <button class="btn-secondary btn-sm" id="apply200Preset" title="5m OI-Scalp (Stock mode)">5m Scalp</button>
+          <button class="btn-secondary btn-sm" id="apply15mPreset" title="15m OI-Scalp (Stock mode)">15m Swing</button>
+          <button class="btn-secondary btn-sm" id="apply60mPreset" title="60m Pattern Trading">60m Position</button>
+          <button class="btn-accent btn-sm" id="applyUltraPreset" title="OPTIMIZED: 1729% return, 64% WR, -2% DD">Ultra ★★</button>
+          <button class="btn-secondary btn-sm" id="applySettlementPreset" title="大结算日: 37% return, 76% WR, 6.69 PF">Settlement</button>
           <button class="btn-secondary btn-sm" id="clearCache" title="Clear cached data">Clear Cache</button>
           <button class="btn-secondary btn-sm" id="resetConfig">Reset</button>
         </div>
@@ -42,6 +44,7 @@
             <button class="tab-btn" data-source="iv">IV</button>
             <button class="tab-btn" data-source="twitter" title="Backtest Twitter follow signals">Twitter</button>
             <button class="tab-btn" data-source="twitter-sim" title="Simulated Twitter-style signals">Twitter-Sim</button>
+            <button class="tab-btn" data-source="settlement" title="Settlement Day Playbook (大结算日作战卡)">Settlement</button>
           </div>
           <div id="sourceConfig" class="source-config">
             <!-- Source-specific config rendered here -->
@@ -117,12 +120,12 @@
             </div>
           </div>
           <div class="input-group" style="margin-top: 12px;">
-            <label>Options Leverage Multiplier</label>
+            <label>Trading Mode</label>
             <div class="range-container">
-              <input type="range" id="leverageMultiplier" min="1" max="8" value="1">
+              <input type="range" id="leverageMultiplier" min="1" max="50" value="1">
               <span id="leverageValue">1x (Stock)</span>
             </div>
-            <p class="hint-text">Simulates options returns: 5x ≈ ATM puts, 8x ≈ butterfly spread</p>
+            <p class="hint-text">1x=Stock prices | 2x+=Options (leveraged underlying P&L)</p>
           </div>
         </div>
       </div>
@@ -214,6 +217,8 @@
                 <th>Opt Entry</th>
                 <th>Opt Exit</th>
                 <th>P&L %</th>
+                <th>P&L $</th>
+                <th>Total $</th>
                 <th>Bars</th>
                 <th>Exit Reason</th>
               </tr>

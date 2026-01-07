@@ -86,6 +86,7 @@ src/
 - `DailySignalSource` - Multi-indicator confluence
 - `OITrendSource` - Trend following with WASP
 - `IVSignalSource` - IV percentile signals
+- `SettlementDaySource` - 大结算日作战卡 (Settlement Day Playbook)
 
 **Exit Strategies:**
 - `TargetStopExit` - % target / % stop loss
@@ -176,6 +177,145 @@ import { BacktestEngine } from '@core/backtest/engine.js'
 # .env (optional)
 EODHD_API_KEY=your_key       # For daily data fallback
 SCHWAB_APP_KEY=your_key      # For Schwab integration
+```
+
+### Backtesting (UI Only)
+
+All backtesting is done via the web UI at `/backtest`. No CLI scripts.
+
+**Data Source:** Twelve Data (6+ months history for 5m candles)
+**Requires:** Backend server running (`npm start`) for Twelve Data proxy
+
+#### Presets
+
+| Preset | Timeframe | Strategy | Best For |
+|--------|-----------|----------|----------|
+| **5m Scalp** | 5 min | OI-WASP | High-frequency scalping |
+| **15m Swing** | 15 min | OI-WASP | Swing trading |
+| **60m Position** | 60 min | Pattern | Position trading |
+| **Ultra ★★** | 5 min | OI-WASP | Aggressive returns |
+| **Settlement** | 5 min | Settlement Day | OpEx/Month-end |
+
+#### How to Use
+
+1. Start backend: `npm start`
+2. Start dev server: `npm run dev`
+3. Open http://localhost:5173/backtest/
+4. Select a preset or configure manually
+5. Set date range (Twelve Data supports 6+ months)
+6. Click "Run Backtest"
+
+#### Key Parameters
+
+| Parameter | Description | Range |
+|-----------|-------------|-------|
+| WASP Period | SMA period for synthetic WASP | 5-50 |
+| Entry Deviation | % deviation to trigger signal | 0.05-3% |
+| Target % | Take profit threshold | 0.1-5% |
+| Stop % | Stop loss threshold | 0.1-5% |
+| Leverage | Options leverage multiplier | 1-50x |
+
+#### Optimized Config (Validated 2026-01-04)
+
+Tested 840 parameter combinations over 6 months of Twelve Data.
+
+**RECOMMENDED CONFIG:**
+```javascript
+{
+  waspPeriod: 8,
+  entryDeviation: 0.05,  // 0.05% deviation threshold
+  targetPercent: 1.0,    // 1% target
+  stopPercent: 0.5,      // 0.5% stop (2:1 R:R)
+  leverage: 10,          // 10x for conservative, 20x balanced, 35x aggressive
+}
+```
+
+**Results (6 months, 10x leverage):**
+- Total Return: **480%** (~80%/month)
+- Win Rate: **59.3%**
+- Profit Factor: **1.92**
+- Max Drawdown: **-2.5%**
+- Trades: 145
+
+**Leverage Scaling (same base config):**
+
+| Leverage | Return | Win Rate | Profit Factor | Max DD |
+|----------|--------|----------|---------------|--------|
+| 10x | 480% | 59.3% | 1.92 | -2.5% |
+| 20x | 2,124% | 59.3% | 1.92 | -4.9% |
+| 35x | 7,995% | 59.3% | 1.92 | -8.2% |
+
+**Key Insight:** The edge (59% WR, 1.92 PF) is constant - leverage only scales returns and drawdown.
+
+**Alternative Configs:**
+
+| Style | WASP | Dev | Target | Stop | Lev | Return | WR | PF |
+|-------|------|-----|--------|------|-----|--------|-----|-----|
+| Conservative | 8 | 0.05 | 1.0% | 0.5% | 10x | 480% | 59% | 1.92 |
+| Balanced | 12 | 0.08 | 1.0% | 0.5% | 20x | 705% | 57% | 1.62 |
+| Aggressive | 8 | 0.05 | 1.0% | 0.5% | 35x | 7,995% | 59% | 1.92 |
+| High Trades | 15 | 0.10 | 1.0% | 0.25% | 20x | 825% | 47% | 1.61 |
+
+**To re-run optimization:**
+```bash
+npm start  # Start backend first
+node scripts/optimize-oi-scalp.js
+```
+
+**Filters:**
+- RSI/ADX/BB Filters: OFF (default)
+- Week 3-4 Only: OFF (default)
+
+**Important - Exit Strategy:**
+- Ultra preset uses `useUnderlyingPnL = true` → checks underlying price moves (not option P&L)
+- This matches the optimization script and produces ~145 trades in 6 months
+- If `useUnderlyingPnL = false` (option P&L), targets are hit faster → more trades but different results
+
+#### Debugging
+
+Open browser DevTools (F12) to see:
+- `[DEBUG] Creating OI source with config: {...}` - Config values being used
+- `[OI-WASP-OPT] Config: ...` - Signal source initialization
+
+**Note:** 240m (daily) timeframe requires the backend server (`npm start`).
+
+### Backtesting with Lumibot
+
+The backtest UI now uses **Lumibot** (Python) for accurate options backtesting.
+
+**Quick Start:**
+```bash
+# Terminal 1: Start Lumibot API
+npm run lumibot
+
+# Terminal 2: Start dev server
+npm run dev
+
+# Or run both together:
+npm run backtest
+```
+
+**How it works:**
+1. UI sends backtest request to Lumibot API (port 8002)
+2. Lumibot runs Python backtest with real market data
+3. Results displayed in the web UI
+
+**Data Sources:**
+
+| Source | Data | Cost | Setup |
+|--------|------|------|-------|
+| Yahoo | Stocks, daily | Free | Default |
+| Polygon | Stocks + Options | Free tier | `export POLYGON_API_KEY=xxx` |
+| ThetaData | Best options data | Subscription | Install lumibot[thetadata] |
+
+**API Endpoints:**
+- `GET http://localhost:8002/health` - Check API status
+- `POST http://localhost:8002/backtest` - Run backtest
+
+**Manual Python Backtest:**
+```bash
+source .venv-lumibot/bin/activate
+python scripts/lumibot_oi_scalp_options.py
 ```
 
 ## Testing
@@ -269,3 +409,29 @@ Edit `src/core/patterns/detector.js`:
 - Charts: TradingView Lightweight Charts + Chart.js
 - Build artifacts (`dist/`) committed for GitHub Pages
 - Python required for Robinhood API bridge
+
+
+## Lumibot (Alternative Backtesting)
+
+For production-grade backtesting, consider [Lumibot](https://lumibot.lumiwealth.com/):
+
+```bash
+# Create clean virtual environment
+python -m venv lumibot_env
+source lumibot_env/bin/activate
+pip install lumibot
+
+# Run OI-Scalp strategy
+python scripts/lumibot_oi_scalp.py
+```
+
+**Benefits:**
+- Same code for backtest → live trading
+- Built-in options support (ThetaData, Polygon)
+- Event-based engine
+- Professional tearsheets
+
+**Data Sources:**
+- Yahoo: Free, daily only
+- Polygon.io: Intraday, requires API key
+- ThetaData: Best for options, subscription required 

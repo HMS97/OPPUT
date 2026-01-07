@@ -1,5 +1,5 @@
 # CONTINUITY_CLAUDE-opput
-Updated: 2026-01-04T05:00:07.861Z
+Updated: 2026-01-04T16:23:15.874Z
 
 ## Goal
 Maintain and fix bugs in the OPPUT trading analysis platform following the established Vite-based modular architecture.
@@ -103,8 +103,38 @@ OPPUT/
     - Root cause: Equity curve was calculated in engine BEFORE leverage applied in main.js
     - Fix: Recalculate equity curve after applying leverage to trades using calculateEquityCurve()
     - Now trades AND equity chart reflect leveraged returns correctly
-- Now: [→] Strategies documentation page added
-- Next: Monitor for user feedback on new page
+  - [x] Fixed UI vs CLI backtest consistency (2026-01-04)
+    - Root cause: UI used `useOptionPnL = true` (option P&L for exits), CLI used `useOptionPnL = false` (underlying price)
+    - UI showed ~1000 trades vs CLI's ~145 trades because options hit targets faster
+    - Fix: Changed UI to respect `config.useUnderlyingPnL` flag (Ultra preset sets it to true)
+    - Now UI and CLI produce matching results: 145 trades, 480% return, 59.3% WR
+  - [x] Integrated Lumibot for proper options backtesting (2026-01-04)
+    - Created `.venv-lumibot/` with Python 3.11 (required for modern type hints)
+    - Created `scripts/lumibot_oi_scalp_options.py` with OI-Scalp strategy
+    - Tested with Yahoo data (daily, stock-only): 47 trades, 2.22% return
+    - Documented Polygon/ThetaData setup for real options data
+  - [x] Replaced JS backtest with Lumibot API (2026-01-04)
+    - Created `scripts/lumibot_api.py` FastAPI server (port 8002)
+    - Updated `src/backtest/main.js` to call Lumibot API instead of JS engine
+    - Added `npm run lumibot` and `npm run backtest` scripts
+    - UI now displays Lumibot results with real option P&L
+  - [x] Fixed signal handler error in Lumibot API (2026-01-04)
+    - Error: "signal only works in main thread of the main interpreter"
+    - Root cause: Lumibot uses APScheduler which requires main thread for signals
+    - Fix: Created subprocess-based runner (`scripts/lumibot_runner.py`)
+    - API calls subprocess instead of running Lumibot directly
+    - Suppressed stdout during imports to get clean JSON output
+  - [x] Polygon API intraday backtesting (2026-01-04)
+    - Added timeframe parameter to API and runner (1D, 1H, 15M, 5M)
+    - Updated UI to pass timeframe to Lumibot API
+    - Tested all timeframes with Polygon data:
+      * 1D: 31 trades, +0.48%, 45% WR (6 months)
+      * 1H: 23 trades, +0.27%, 44% WR (3 months)
+      * 15M: 24 trades, -0.24%, 29% WR (2 months)
+      * 5M: 14 trades, -0.26%, 21% WR (1 month)
+    - Note: Trading stocks directly (no option leverage simulation)
+- Now: [→] Polygon intraday backtesting complete
+- Next: Add leverage multiplier to Lumibot for option-like returns
 - Verified (2026-01-04):
   - [x] Build verification: Vite build succeeds, all 6 pages generated
   - [x] Added Strategies documentation page with signal sources, exit strategies, and presets

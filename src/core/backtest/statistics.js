@@ -144,7 +144,8 @@ function calculateDrawdown(trades, initialCapital) {
     return { maxDrawdown: 0, maxDrawdownDuration: 0, currentDrawdown: 0 }
   }
 
-  let equity = 100 // Start at 100 for percentage calculation
+  // Use dollar-based equity for accurate drawdown calculation
+  let equity = initialCapital
   let peak = equity
   let maxDrawdown = 0
   let currentDrawdown = 0
@@ -153,7 +154,12 @@ function calculateDrawdown(trades, initialCapital) {
   let currentDrawdownDuration = 0
 
   for (let i = 0; i < trades.length; i++) {
-    equity += trades[i].pnlPercent
+    // Use dollar P&L for equity calculation
+    const pnlDollar = trades[i].pnl || 0
+    equity += pnlDollar
+
+    // Ensure equity doesn't go negative
+    equity = Math.max(0, equity)
 
     if (equity > peak) {
       peak = equity
@@ -162,7 +168,7 @@ function calculateDrawdown(trades, initialCapital) {
         drawdownStart = null
         currentDrawdownDuration = 0
       }
-    } else {
+    } else if (peak > 0) {
       currentDrawdown = ((equity - peak) / peak) * 100
       maxDrawdown = Math.min(maxDrawdown, currentDrawdown)
 

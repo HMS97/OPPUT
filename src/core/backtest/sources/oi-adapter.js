@@ -102,7 +102,7 @@ export class OISignalSource {
     this.cachedIndicators = null
     this.cachedCandleCount = 0
 
-    console.log(`[OI-WASP-OPT] Timeframe: ${this.timeframe}m, Scale: ${scale}x, Entry: ${this.entryDeviation.toFixed(2)}%, Strong: ${this.strongDeviation.toFixed(2)}%, Filters: ${this.useFilters}`)
+    console.log(`[OI-WASP-OPT] Config: TF=${this.timeframe}m, WASP=${this.waspPeriod}, Entry=${this.entryDeviation.toFixed(3)}%, Strong=${this.strongDeviation.toFixed(3)}%, Cooldown=${this.cooldownBars}, Filters=${this.useFilters}, WeekFilter=${this.useWeekFilter}`)
   }
 
   /**
